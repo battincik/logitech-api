@@ -7,6 +7,7 @@ import {
   Tray,
 } from "electron";
 import path from "node:path";
+import { mkdir } from "node:fs/promises";
 import { detectBatteryEvents } from "./battery-events";
 import { GHubClient } from "./ghub-client";
 import { StateStore } from "./state-store";
@@ -18,6 +19,7 @@ import type {
 } from "./types";
 
 const APP_ID = "net.coreor.ghubbatterytray";
+const TOAST_ACTIVATOR_CLSID = "{7E48210F-C8CB-4A68-AD7D-DBE52948E983}";
 
 let tray: Tray;
 let client: GHubClient;
@@ -25,7 +27,10 @@ let store: StateStore;
 let connected = false;
 const devices = new Map<string, BatteryDevice>();
 
-app.setAppUserModelId(APP_ID);
+if (process.platform === "win32") {
+  app.setAppUserModelId(APP_ID);
+  app.setToastActivatorCLSID(TOAST_ACTIVATOR_CLSID);
+}
 
 const singleInstance = app.requestSingleInstanceLock();
 if (!singleInstance) app.quit();
@@ -105,6 +110,10 @@ function updateTray(): void {
       { type: "separator" },
       { label: "Şimdi yenile", click: () => client.refresh() },
       {
+        label: "Bildirim testi",
+        click: () => showSystemNotification("G HUB Battery Tray", "Windows bildirimleri çalışıyor."),
+      },
+      {
         label: "G HUB'ı aç",
         click: () => shell.openPath(path.join(process.env.ProgramFiles ?? "C:\\Program Files", "LGHUB", "lghub.exe")),
       },
@@ -112,6 +121,50 @@ function updateTray(): void {
       { label: "Çıkış", click: () => app.quit() },
     ]),
   );
+}
+
+function showSystemNotification(title: string, body: string, critical = false): void {
+  if (!Notification.isSupported()) {
+    console.error("Bu sistem Electron bildirimlerini desteklemiyor.");
+    return;
+  }
+
+  const notification = new Notification({
+    title,
+    body,
+    urgency: critical ? "critical" : "normal",
+    silent: false,
+  });
+  notification.on("failed", (_event, error) => {
+    console.error("Windows bildirimi gösterilemedi:", error);
+  });
+  notification.show();
+}
+
+async function ensureWindowsNotificationRegistration(): Promise<void> {
+  if (process.platform !== "win32") return;
+
+  const shortcutPath = path.join(
+    app.getPath("appData"),
+    "Microsoft",
+    "Windows",
+    "Start Menu",
+    "Programs",
+    "G HUB Battery Tray.lnk",
+  );
+  await mkdir(path.dirname(shortcutPath), { recursive: true });
+
+  const created = shell.writeShortcutLink(shortcutPath, "create", {
+    target: process.execPath,
+    args: app.isPackaged ? "" : `"${app.getAppPath()}"`,
+    cwd: app.isPackaged ? path.dirname(process.execPath) : app.getAppPath(),
+    description: "Logitech G HUB cihazlarının pil durumunu gösterir.",
+    icon: process.execPath,
+    iconIndex: 0,
+    appUserModelId: APP_ID,
+    toastActivatorClsid: TOAST_ACTIVATOR_CLSID,
+  });
+  if (!created) throw new Error("Başlat menüsü bildirim kısayolu oluşturulamadı");
 }
 
 function notify(device: BatteryDevice, event: BatteryEvent): void {
@@ -137,9 +190,7 @@ function notify(device: BatteryDevice, event: BatteryEvent): void {
       break;
   }
 
-  if (Notification.isSupported()) {
-    new Notification({ title, body, urgency: event.type === "empty" ? "critical" : "normal" }).show();
-  }
+  showSystemNotification(title, body, event.type === "empty");
 }
 
 function registerDevices(infos: GHubDeviceInfo[]): void {
@@ -186,6 +237,9 @@ async function updateBattery(payload: BatteryPayload): Promise<void> {
 }
 
 app.whenReady().then(async () => {
+  await ensureWindowsNotificationRegistration().catch((error: unknown) => {
+    console.error("Windows bildirim kaydı oluşturulamadı:", error);
+  });
   store = new StateStore(app.getPath("userData"));
   await store.load();
 

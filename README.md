@@ -22,7 +22,7 @@ Bildirimler:
 
 - Windows 10 veya Windows 11
 - Node.js 20 veya üzeri
-- pnpm
+- npm
 - Logitech G HUB'ın kurulu ve çalışıyor olması
 
 G HUB'ın `lghub_agent.exe` işlemi normalde `127.0.0.1:9010` adresinde çalışır.
@@ -30,8 +30,8 @@ G HUB'ın `lghub_agent.exe` işlemi normalde `127.0.0.1:9010` adresinde çalış
 ## Geliştirme
 
 ```powershell
-pnpm install
-pnpm dev
+npm install
+npm run dev
 ```
 
 Uygulama pencere açmaz. Windows bildirim alanındaki gizli simgeler (`^`) bölümüne bakın.
@@ -39,13 +39,13 @@ Uygulama pencere açmaz. Windows bildirim alanındaki gizli simgeler (`^`) böl�
 Testler:
 
 ```powershell
-pnpm test
+npm test
 ```
 
 ## Windows kurulum dosyası
 
 ```powershell
-pnpm dist
+npm run dist
 ```
 
 Kurulum dosyası `release` klasöründe oluşur.
@@ -59,5 +59,7 @@ Get-NetTCPConnection -LocalPort 9010 -State Listen
 ```
 
 Sonuç yoksa G HUB'ı kapatıp yeniden açın. Görev Yöneticisi'nde `lghub_agent.exe` işleminin çalıştığını doğrulayın.
+
+Bildirimleri denemek için tepsi simgesine sağ tıklayıp **Bildirim testi** seçeneğini kullanın. Bildirim görünmüyorsa Windows **Ayarlar > Sistem > Bildirimler** altında G HUB Battery Tray bildirimlerinin açık ve Rahatsız Etmeyin modunun kapalı olduğunu kontrol edin.
 
 Bu uygulama G HUB'ın belgelenmemiş yerel arayüzünü kullanır. Gelecekteki bir G HUB güncellemesi protokolü değiştirirse istemcinin güncellenmesi gerekebilir.

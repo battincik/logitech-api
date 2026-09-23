@@ -7,23 +7,22 @@
   "type": "commonjs",
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "dev": "pnpm build && electron .",
+    "dev": "npm run build && electron .",
     "start": "electron .",
-    "test": "pnpm build && node --test dist/battery-events.test.js",
-    "dist": "pnpm build && electron-builder --win nsis"
+    "test": "npm run build && node --test dist/battery-events.test.js",
+    "dist": "npm run build && electron-builder --win nsis"
   },
   "engines": {
     "node": ">=20"
   },
-  "packageManager": "pnpm@10.17.1",
   "dependencies": {
     "ws": "^8.18.3"
   },
   "devDependencies": {
     "@types/node": "^24.5.2",
     "@types/ws": "^8.18.1",
-    "electron": "^38.1.2",
-    "electron-builder": "^26.0.12",
+    "electron": "^44.4.5",
+    "electron-builder": "^26.15.3",
     "typescript": "^5.9.2"
   },
   "build": {
@@ -43,7 +42,9 @@
       "target": [
         {
           "target": "nsis",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         }
       ]
     },

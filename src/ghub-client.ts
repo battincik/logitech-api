@@ -63,8 +63,8 @@ export class GHubClient extends EventEmitter<GHubClientEvents> {
     this.socket.on("open", () => {
       this.reconnectDelay = 2_000;
       this.emit("connected");
-      this.refresh();
       this.subscribe();
+      this.refresh();
 
       clearInterval(this.pollTimer);
       this.pollTimer = setInterval(() => this.refresh(), 60_000);
@@ -97,6 +97,9 @@ export class GHubClient extends EventEmitter<GHubClientEvents> {
 
   private subscribe(): void {
     this.send("SUBSCRIBE", "/battery/state/changed");
+    this.send("SUBSCRIBE", "/devices/state/changed");
+    this.send("SUBSCRIBE", "/devices/options/device_arrival");
+    this.send("SUBSCRIBE", "/devices/options/device_removal");
   }
 
   private handleMessage(raw: string): void {
@@ -119,6 +122,17 @@ export class GHubClient extends EventEmitter<GHubClientEvents> {
       return;
     }
 
+    if (
+      message.verb === "BROADCAST" &&
+      (message.path === "/devices/state/changed" ||
+        message.path === "/devices/options/device_arrival" ||
+        message.path === "/devices/options/device_removal")
+    ) {
+      this.send("SUBSCRIBE", message.path);
+      this.refresh();
+      return;
+    }
+
     const isBatteryResponse =
       message.path?.startsWith("/battery/") &&
       message.path.endsWith("/state") &&
@@ -126,7 +140,10 @@ export class GHubClient extends EventEmitter<GHubClientEvents> {
     const isBatteryBroadcast = message.path === "/battery/state/changed";
 
     if ((isBatteryResponse || isBatteryBroadcast) && message.payload) {
-      const { deviceId, percentage } = message.payload;
+      const { percentage } = message.payload;
+      const deviceId =
+        message.payload.deviceId ??
+        (isBatteryResponse ? message.path?.split("/")[2] : undefined);
       if (typeof deviceId === "string" && typeof percentage === "number") {
         this.emit("battery", {
           deviceId,
@@ -138,7 +155,9 @@ export class GHubClient extends EventEmitter<GHubClientEvents> {
         });
       }
 
-      if (isBatteryBroadcast) this.subscribe();
+      if (isBatteryBroadcast && message.verb === "BROADCAST") {
+        this.send("SUBSCRIBE", "/battery/state/changed");
+      }
     }
   }
 }
