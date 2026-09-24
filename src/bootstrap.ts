@@ -39,7 +39,7 @@ else {
   } catch (error) {
     console.error("Uygulama başlatılamadı:", error);
     void app.whenReady().then(() => {
-      dialog.showErrorBox("G HUB Battery Tray", `Uygulama başlatılamadı: ${String(error)}`);
+      dialog.showErrorBox("Logitech Battery API", `Uygulama başlatılamadı: ${String(error)}`);
       app.quit();
     });
   }
