@@ -3707,7 +3707,88 @@ __export(main_exports, {
 });
 module.exports = __toCommonJS(main_exports);
 var import_electron = require("electron");
-var import_node_path2 = __toESM(require("node:path"));
+var import_promises4 = require("node:fs/promises");
+var import_node_path4 = __toESM(require("node:path"));
+
+// src/app-store.ts
+var import_promises = require("node:fs/promises");
+var import_node_path = __toESM(require("node:path"));
+var DEFAULT_SETTINGS = {
+  launchAtStartup: false,
+  language: "tr",
+  notifyDisconnect: true,
+  historyEnabled: true
+};
+var HISTORY_RETENTION_MS = 7 * 24 * 60 * 60 * 1e3;
+var HISTORY_SAMPLE_MS = 5 * 60 * 1e3;
+var MAX_POINTS_PER_DEVICE = 2500;
+var AppStore = class {
+  filePath;
+  data = { settings: { ...DEFAULT_SETTINGS }, history: {} };
+  writeQueue = Promise.resolve();
+  constructor(userDataPath) {
+    this.filePath = import_node_path.default.join(userDataPath, "app-data.json");
+  }
+  async load() {
+    try {
+      const parsed = JSON.parse(await (0, import_promises.readFile)(this.filePath, "utf8"));
+      const language = parsed.settings?.language === "en" ? "en" : "tr";
+      this.data = {
+        settings: { ...DEFAULT_SETTINGS, ...parsed.settings, language },
+        history: parsed.history && typeof parsed.history === "object" ? parsed.history : {}
+      };
+      this.pruneHistory();
+    } catch {
+      this.data = { settings: { ...DEFAULT_SETTINGS }, history: {} };
+    }
+  }
+  get settings() {
+    return { ...this.data.settings };
+  }
+  get history() {
+    return structuredClone(this.data.history);
+  }
+  async updateSettings(patch) {
+    const next = { ...this.data.settings, ...patch };
+    next.language = next.language === "en" ? "en" : "tr";
+    this.data.settings = next;
+    await this.persist();
+    return this.settings;
+  }
+  async recordBattery(device) {
+    if (!this.data.settings.historyEnabled || device.percentage === void 0) return;
+    const series = this.data.history[device.stableKey] ?? { name: device.name, points: [] };
+    series.name = device.name;
+    const last = series.points.at(-1);
+    const now = Date.now();
+    const changed = !last || last.percentage !== device.percentage || last.charging !== device.charging;
+    if (!changed && now - last.timestamp < HISTORY_SAMPLE_MS) return;
+    series.points.push({ timestamp: now, percentage: device.percentage, charging: device.charging });
+    this.data.history[device.stableKey] = series;
+    this.pruneHistory();
+    await this.persist();
+  }
+  async clearHistory() {
+    this.data.history = {};
+    await this.persist();
+  }
+  pruneHistory() {
+    const cutoff = Date.now() - HISTORY_RETENTION_MS;
+    for (const [key, series] of Object.entries(this.data.history)) {
+      series.points = series.points.filter((point) => Number.isFinite(point.timestamp) && point.timestamp >= cutoff).slice(-MAX_POINTS_PER_DEVICE);
+      if (series.points.length === 0) delete this.data.history[key];
+    }
+  }
+  async persist() {
+    const serialized = JSON.stringify(this.data, null, 2);
+    this.writeQueue = this.writeQueue.catch(() => {
+    }).then(async () => {
+      await (0, import_promises.mkdir)(import_node_path.default.dirname(this.filePath), { recursive: true });
+      await (0, import_promises.writeFile)(this.filePath, serialized, "utf8");
+    });
+    await this.writeQueue;
+  }
+};
 
 // src/battery-events.ts
 var LOW_BATTERY_THRESHOLDS = [20, 10, 5, 3];
@@ -3772,6 +3853,159 @@ function detectBatteryEvents(previous, current) {
   };
 }
 
+// src/dashboard.ts
+var DASHBOARD_PRELOAD = `
+const { contextBridge, ipcRenderer } = require("electron");
+contextBridge.exposeInMainWorld("logitechApi", {
+  getState: () => ipcRenderer.invoke("dashboard:get-state"),
+  updateSettings: (settings) => ipcRenderer.invoke("dashboard:update-settings", settings),
+  refresh: () => ipcRenderer.invoke("dashboard:refresh"),
+  reconnect: () => ipcRenderer.invoke("dashboard:reconnect"),
+  checkUpdate: () => ipcRenderer.invoke("dashboard:check-update"),
+  restartUpdate: () => ipcRenderer.invoke("dashboard:restart-update"),
+  clearHistory: () => ipcRenderer.invoke("dashboard:clear-history"),
+  openLog: () => ipcRenderer.invoke("dashboard:open-log"),
+  copyDiagnostics: () => ipcRenderer.invoke("dashboard:copy-diagnostics"),
+  onState: (callback) => ipcRenderer.on("dashboard:state", (_event, state) => callback(state)),
+});
+`;
+function createDashboardHtml() {
+  return `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
+  <title>Logitech Battery API</title>
+  <style>
+    :root { color-scheme: dark; --bg:#09090b; --panel:#18181b; --line:#2f2f35; --text:#f4f4f5; --muted:#a1a1aa; --green:#22c55e; --yellow:#eab308; --orange:#f97316; --red:#ef4444; --blue:#38bdf8; }
+    * { box-sizing:border-box; }
+    body { margin:0; background:var(--bg); color:var(--text); font:13px/1.45 Inter,Segoe UI,sans-serif; }
+    button,select { font:inherit; }
+    header { height:58px; padding:0 20px; display:flex; align-items:center; justify-content:space-between; border-bottom:1px solid var(--line); background:#111113; }
+    h1 { margin:0; font-size:16px; font-weight:650; }
+    #status { color:var(--muted); font-size:12px; }
+    nav { display:flex; gap:4px; padding:10px 16px; border-bottom:1px solid var(--line); overflow:auto; }
+    nav button { border:0; background:transparent; color:var(--muted); padding:7px 10px; border-radius:6px; cursor:pointer; white-space:nowrap; }
+    nav button.active { background:#27272a; color:var(--text); }
+    main { padding:18px; max-width:900px; margin:auto; }
+    section { display:none; }
+    section.active { display:block; }
+    .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:10px; }
+    .card { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:14px; }
+    .row { display:flex; justify-content:space-between; align-items:center; gap:12px; }
+    .stack { display:grid; gap:10px; }
+    .muted { color:var(--muted); }
+    .battery { display:flex; align-items:center; gap:10px; }
+    .dot { width:14px; height:14px; border-radius:50%; flex:none; box-shadow:0 0 0 1px #ffffff55 inset; }
+    .percent { font-size:22px; font-weight:700; }
+    .button { border:1px solid #3f3f46; background:#27272a; color:var(--text); padding:7px 11px; border-radius:6px; cursor:pointer; }
+    .button:hover { background:#323238; }
+    .button.primary { border-color:#16803a; background:#166534; }
+    .button.danger { border-color:#7f1d1d; color:#fecaca; }
+    .actions { display:flex; flex-wrap:wrap; gap:8px; margin-top:12px; }
+    .setting { padding:12px 0; border-bottom:1px solid var(--line); }
+    .setting:last-child { border-bottom:0; }
+    input[type=checkbox] { width:17px; height:17px; accent-color:var(--green); }
+    select { color:var(--text); background:#27272a; border:1px solid #3f3f46; padding:6px 8px; border-radius:6px; }
+    .chart { width:100%; height:150px; margin-top:12px; background:#111113; border-radius:6px; overflow:hidden; }
+    .chart svg { width:100%; height:100%; }
+    pre { margin:0; white-space:pre-wrap; overflow-wrap:anywhere; color:#d4d4d8; font:12px/1.5 Consolas,monospace; }
+    .empty { padding:30px; text-align:center; color:var(--muted); }
+    .badge { padding:3px 7px; border-radius:999px; background:#27272a; color:var(--muted); font-size:11px; }
+    @media (max-width:600px) { main { padding:12px; } header { padding:0 14px; } }
+  </style>
+</head>
+<body>
+  <header><div><h1>Logitech Battery API</h1><div id="status"></div></div><span id="version" class="badge"></span></header>
+  <nav id="tabs"></nav>
+  <main>
+    <section id="overview" class="active"><div id="devices" class="grid"></div><div class="actions"><button class="button" data-action="refresh"></button><button class="button" data-action="reconnect"></button></div></section>
+    <section id="history"><div id="history-list" class="stack"></div><div class="actions"><button class="button danger" data-action="clear-history"></button></div></section>
+    <section id="updates"><div id="update-card" class="card"></div></section>
+    <section id="diagnostics"><div class="card"><pre id="diagnostics-text"></pre><div class="actions"><button class="button" data-action="copy-diagnostics"></button><button class="button" data-action="open-log"></button></div></div></section>
+    <section id="settings"><div class="card stack" id="settings-list"></div></section>
+  </main>
+  <script>
+    const api = window.logitechApi;
+    const words = {
+      tr:{overview:'Genel Bak\u0131\u015F',history:'Pil Ge\xE7mi\u015Fi',updates:'G\xFCncellemeler',diagnostics:'Tan\u0131lama',settings:'Ayarlar',connected:'G HUB ba\u011Fl\u0131',disconnected:'G HUB ba\u011Flant\u0131s\u0131 bekleniyor',refresh:'\u015Eimdi yenile',reconnect:'Yeniden ba\u011Flan',noDevices:'Pil destekli cihaz bulunamad\u0131',charging:'\u015Earj oluyor',lastUpdate:'Son g\xFCncelleme',clearHistory:'Ge\xE7mi\u015Fi temizle',noHistory:'Hen\xFCz pil ge\xE7mi\u015Fi yok',checkUpdate:'G\xFCncellemeleri denetle',restart:'G\xFCncellemeyi uygula ve yeniden ba\u015Flat',updateState:'Durum',commit:'Commit',message:'De\u011Fi\u015Fiklik',checkedAt:'Son kontrol',copyDiagnostics:'Tan\u0131lamay\u0131 kopyala',openLog:'Log dosyas\u0131n\u0131 a\xE7',launchAtStartup:'Windows ile otomatik ba\u015Flat',notifyDisconnect:'Ba\u011Flant\u0131 kesilince bildir',historyEnabled:'Pil ge\xE7mi\u015Fini kaydet',language:'Dil',turkish:'T\xFCrk\xE7e',english:'English',idle:'G\xFCncel',checking:'Denetleniyor',ready:'Yeniden ba\u015Flatmaya haz\u0131r',error:'Hata',copied:'Panoya kopyaland\u0131'},
+      en:{overview:'Overview',history:'Battery History',updates:'Updates',diagnostics:'Diagnostics',settings:'Settings',connected:'G HUB connected',disconnected:'Waiting for G HUB',refresh:'Refresh now',reconnect:'Reconnect',noDevices:'No battery-powered devices found',charging:'Charging',lastUpdate:'Last update',clearHistory:'Clear history',noHistory:'No battery history yet',checkUpdate:'Check for updates',restart:'Apply update and restart',updateState:'Status',commit:'Commit',message:'Change',checkedAt:'Last checked',copyDiagnostics:'Copy diagnostics',openLog:'Open log file',launchAtStartup:'Start automatically with Windows',notifyDisconnect:'Notify when connection is lost',historyEnabled:'Record battery history',language:'Language',turkish:'T\xFCrk\xE7e',english:'English',idle:'Up to date',checking:'Checking',ready:'Ready to restart',error:'Error',copied:'Copied to clipboard'}
+    };
+    let state;
+    let activeTab = 'overview';
+    const esc = (value) => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    const color = (value) => value == null ? '#71717a' : value <= 5 ? '#ef4444' : value <= 20 ? '#f97316' : value <= 50 ? '#eab308' : '#22c55e';
+    const date = (value) => value ? new Intl.DateTimeFormat(state.settings.language,{dateStyle:'short',timeStyle:'short'}).format(new Date(value)) : '\u2014';
+    const t = (key) => words[state?.settings?.language || 'tr'][key] || key;
+
+    function renderTabs() {
+      const tabs = ['overview','history','updates','diagnostics','settings'];
+      document.getElementById('tabs').innerHTML = tabs.map(id => '<button data-tab="'+id+'" class="'+(id===activeTab?'active':'')+'">'+t(id)+'</button>').join('');
+      document.querySelectorAll('main section').forEach(el => el.classList.toggle('active',el.id===activeTab));
+    }
+    function renderDevices() {
+      const el = document.getElementById('devices');
+      el.innerHTML = state.devices.length ? state.devices.map(device => '<article class="card"><div class="row"><div class="battery"><span class="dot" style="background:'+color(device.percentage)+'"></span><div><strong>'+esc(device.name)+'</strong><div class="muted">'+esc(device.model)+'</div></div></div><span class="percent">'+(device.percentage == null?'\u2014':device.percentage+'%')+'</span></div><div class="row" style="margin-top:12px"><span class="muted">'+(device.charging?t('charging'):device.connected?t('connected'):t('disconnected'))+'</span><span class="muted">'+date(device.updatedAt)+'</span></div></article>').join('') : '<div class="empty">'+t('noDevices')+'</div>';
+    }
+    function makeChart(points) {
+      if (!points.length) return '';
+      const min = points[0].timestamp, max = points.at(-1).timestamp || min + 1;
+      const coords = points.map((p,i) => ((max===min ? i/Math.max(1,points.length-1) : (p.timestamp-min)/(max-min))*100)+','+(95-p.percentage*.9)).join(' ');
+      const last = points.at(-1);
+      return '<div class="chart"><svg viewBox="0 0 100 100" preserveAspectRatio="none"><line x1="0" y1="95" x2="100" y2="95" stroke="#3f3f46"/><line x1="0" y1="50" x2="100" y2="50" stroke="#27272a"/><polyline points="'+coords+'" fill="none" stroke="'+color(last.percentage)+'" stroke-width="2" vector-effect="non-scaling-stroke"/></svg></div>';
+    }
+    function renderHistory() {
+      const entries = Object.values(state.history);
+      document.getElementById('history-list').innerHTML = entries.length ? entries.map(series => { const last=series.points.at(-1); return '<article class="card"><div class="row"><strong>'+esc(series.name)+'</strong><span class="badge">'+(last?last.percentage+'%':'\u2014')+'</span></div>'+makeChart(series.points)+'</article>'; }).join('') : '<div class="empty">'+t('noHistory')+'</div>';
+    }
+    function renderUpdate() {
+      const u=state.update;
+      document.getElementById('update-card').innerHTML='<div class="stack"><div class="row"><span>'+t('updateState')+'</span><strong>'+t(u.phase)+'</strong></div><div class="row"><span class="muted">'+t('commit')+'</span><span>'+esc(u.commit||'\u2014')+'</span></div><div class="row"><span class="muted">'+t('message')+'</span><span>'+esc(u.message||u.detail||'\u2014')+'</span></div><div class="row"><span class="muted">'+t('checkedAt')+'</span><span>'+date(u.checkedAt)+'</span></div></div><div class="actions"><button class="button" data-action="check-update">'+t('checkUpdate')+'</button>'+(u.phase==='ready'?'<button class="button primary" data-action="restart-update">'+t('restart')+'</button>':'')+'</div>';
+    }
+    function renderDiagnostics() {
+      const d=state.diagnostics;
+      document.getElementById('diagnostics-text').textContent=['App: '+state.app.name+' '+state.app.version,'Platform: '+d.platform+' '+d.arch,'Electron: '+d.electron,'Node: '+d.node,'G HUB: '+(state.connection.connected?'connected':'disconnected'),'Last connected: '+date(state.connection.lastConnectedAt),'Last disconnected: '+date(state.connection.lastDisconnectedAt),'Last error: '+(state.connection.lastError||'\u2014'),'Devices: '+state.devices.length,'Update: '+state.update.phase,'User data: '+d.userData,'Log: '+d.logPath].join('
+');
+    }
+    function renderSettings() {
+      const s=state.settings;
+      document.getElementById('settings-list').innerHTML='<label class="setting row"><span>'+t('launchAtStartup')+'</span><input type="checkbox" data-setting="launchAtStartup" '+(s.launchAtStartup?'checked':'')+'></label><label class="setting row"><span>'+t('notifyDisconnect')+'</span><input type="checkbox" data-setting="notifyDisconnect" '+(s.notifyDisconnect?'checked':'')+'></label><label class="setting row"><span>'+t('historyEnabled')+'</span><input type="checkbox" data-setting="historyEnabled" '+(s.historyEnabled?'checked':'')+'></label><label class="setting row"><span>'+t('language')+'</span><select data-setting="language"><option value="tr" '+(s.language==='tr'?'selected':'')+'>'+t('turkish')+'</option><option value="en" '+(s.language==='en'?'selected':'')+'>'+t('english')+'</option></select></label>';
+    }
+    function render(next) {
+      state=next;
+      document.documentElement.lang=state.settings.language;
+      document.getElementById('status').textContent=state.connection.connected?t('connected'):t('disconnected');
+      document.getElementById('version').textContent='v'+state.app.version;
+      renderTabs(); renderDevices(); renderHistory(); renderUpdate(); renderDiagnostics(); renderSettings();
+      document.querySelector('[data-action="refresh"]').textContent=t('refresh');
+      document.querySelector('[data-action="reconnect"]').textContent=t('reconnect');
+      document.querySelector('[data-action="clear-history"]').textContent=t('clearHistory');
+      document.querySelector('[data-action="copy-diagnostics"]').textContent=t('copyDiagnostics');
+      document.querySelector('[data-action="open-log"]').textContent=t('openLog');
+    }
+    document.addEventListener('click', async event => {
+      const tab=event.target.closest('[data-tab]'); if(tab){activeTab=tab.dataset.tab;renderTabs();return;}
+      const action=event.target.closest('[data-action]')?.dataset.action;
+      if(action==='refresh') await api.refresh();
+      if(action==='reconnect') await api.reconnect();
+      if(action==='check-update') await api.checkUpdate();
+      if(action==='restart-update') await api.restartUpdate();
+      if(action==='clear-history') await api.clearHistory();
+      if(action==='open-log') await api.openLog();
+      if(action==='copy-diagnostics'){await api.copyDiagnostics();event.target.textContent=t('copied');}
+    });
+    document.addEventListener('change', async event => {
+      const key=event.target.dataset.setting; if(!key)return;
+      await api.updateSettings({[key]:event.target.type==='checkbox'?event.target.checked:event.target.value});
+    });
+    api.onState(render);
+    api.getState().then(render);
+  </script>
+</body>
+</html>`;
+}
+
 // src/ghub-client.ts
 var import_node_events = require("node:events");
 var import_node_crypto = require("node:crypto");
@@ -3809,6 +4043,10 @@ var GHubClient = class extends import_node_events.EventEmitter {
   refresh() {
     this.send("GET", "/devices/list");
   }
+  reconnect() {
+    this.stop();
+    setTimeout(() => this.start(), 250);
+  }
   connect() {
     if (this.stopped) return;
     this.socket = new wrapper_default("ws://127.0.0.1:9010", ["json"], {
@@ -3842,9 +4080,9 @@ var GHubClient = class extends import_node_events.EventEmitter {
     this.reconnectTimer = setTimeout(() => this.connect(), this.reconnectDelay);
     this.reconnectDelay = Math.min(this.reconnectDelay * 2, 3e4);
   }
-  send(verb, path3) {
+  send(verb, path5) {
     if (this.socket?.readyState !== wrapper_default.OPEN) return;
-    this.socket.send(JSON.stringify({ msgId: (0, import_node_crypto.randomUUID)(), verb, path: path3 }));
+    this.socket.send(JSON.stringify({ msgId: (0, import_node_crypto.randomUUID)(), verb, path: path5 }));
   }
   subscribe() {
     this.send("SUBSCRIBE", "/battery/state/changed");
@@ -3885,19 +4123,112 @@ var GHubClient = class extends import_node_events.EventEmitter {
   }
 };
 
+// src/i18n.ts
+var messages = {
+  tr: {
+    dashboard: "Kontrol paneli",
+    connected: "G HUB ba\u011Fl\u0131",
+    waiting: "G HUB bekleniyor",
+    noDevices: "Pil destekli cihaz bulunamad\u0131",
+    unknownBattery: "Pil bilinmiyor",
+    charging: "\u015Earj oluyor",
+    refresh: "\u015Eimdi yenile",
+    checkUpdates: "G\xFCncellemeleri denetle",
+    checkingUpdates: "G\xFCncelleme denetleniyor\u2026",
+    updateReady: "G\xFCncelleme haz\u0131r",
+    updateError: "G\xFCncelleme hatas\u0131",
+    restart: "Yeniden ba\u015Flat",
+    openGHub: "G HUB'\u0131 a\xE7",
+    launchAtStartup: "Windows ile ba\u015Flat",
+    language: "Dil",
+    exit: "\xC7\u0131k\u0131\u015F",
+    disconnectedTitle: "G HUB ba\u011Flant\u0131s\u0131 kesildi",
+    disconnectedBody: "Ba\u011Flant\u0131 otomatik olarak yeniden kurulmaya \xE7al\u0131\u015F\u0131l\u0131yor.",
+    deviceOfflineTitle: "Cihaz ba\u011Flant\u0131s\u0131 kesildi",
+    deviceOfflineBody: "{device} art\u0131k \xE7evrimd\u0131\u015F\u0131."
+  },
+  en: {
+    dashboard: "Dashboard",
+    connected: "G HUB connected",
+    waiting: "Waiting for G HUB",
+    noDevices: "No battery-powered devices found",
+    unknownBattery: "Battery unknown",
+    charging: "Charging",
+    refresh: "Refresh now",
+    checkUpdates: "Check for updates",
+    checkingUpdates: "Checking for updates\u2026",
+    updateReady: "Update ready",
+    updateError: "Update error",
+    restart: "Restart",
+    openGHub: "Open G HUB",
+    launchAtStartup: "Start with Windows",
+    language: "Language",
+    exit: "Quit",
+    disconnectedTitle: "G HUB disconnected",
+    disconnectedBody: "The app is trying to reconnect automatically.",
+    deviceOfflineTitle: "Device disconnected",
+    deviceOfflineBody: "{device} is now offline."
+  }
+};
+function translator(language) {
+  return (key, variables = {}) => {
+    let value = messages[language][key];
+    for (const [name, replacement] of Object.entries(variables)) {
+      value = value.replaceAll(`{${name}}`, replacement);
+    }
+    return value;
+  };
+}
+
+// src/logger.ts
+var import_promises2 = require("node:fs/promises");
+var import_node_path2 = __toESM(require("node:path"));
+var AppLogger = class {
+  filePath;
+  writeQueue = Promise.resolve();
+  constructor(userDataPath) {
+    this.filePath = import_node_path2.default.join(userDataPath, "logs", "app.log");
+  }
+  info(message) {
+    this.write("INFO", message);
+  }
+  error(message, error) {
+    const detail = error instanceof Error ? `${error.name}: ${error.message}` : error ? String(error) : "";
+    this.write("ERROR", detail ? `${message} | ${detail}` : message);
+  }
+  async tail(maxCharacters = 12e3) {
+    try {
+      const content = await (0, import_promises2.readFile)(this.filePath, "utf8");
+      return content.slice(-maxCharacters);
+    } catch {
+      return "";
+    }
+  }
+  write(level, message) {
+    const clean = message.replace(/[\r\n]+/g, " ").slice(0, 4e3);
+    const line = `[${(/* @__PURE__ */ new Date()).toISOString()}] ${level} ${clean}
+`;
+    this.writeQueue = this.writeQueue.catch(() => {
+    }).then(async () => {
+      await (0, import_promises2.mkdir)(import_node_path2.default.dirname(this.filePath), { recursive: true });
+      await (0, import_promises2.appendFile)(this.filePath, line, "utf8");
+    });
+  }
+};
+
 // src/state-store.ts
-var import_promises = require("node:fs/promises");
-var import_node_path = __toESM(require("node:path"));
+var import_promises3 = require("node:fs/promises");
+var import_node_path3 = __toESM(require("node:path"));
 var StateStore = class {
   filePath;
   states = {};
   writeQueue = Promise.resolve();
   constructor(userDataPath) {
-    this.filePath = import_node_path.default.join(userDataPath, "battery-state.json");
+    this.filePath = import_node_path3.default.join(userDataPath, "battery-state.json");
   }
   async load() {
     try {
-      this.states = JSON.parse(await (0, import_promises.readFile)(this.filePath, "utf8"));
+      this.states = JSON.parse(await (0, import_promises3.readFile)(this.filePath, "utf8"));
     } catch {
       this.states = {};
     }
@@ -3910,8 +4241,8 @@ var StateStore = class {
     const serialized = JSON.stringify(this.states, null, 2);
     this.writeQueue = this.writeQueue.catch(() => {
     }).then(async () => {
-      await (0, import_promises.mkdir)(import_node_path.default.dirname(this.filePath), { recursive: true });
-      await (0, import_promises.writeFile)(this.filePath, serialized, "utf8");
+      await (0, import_promises3.mkdir)(import_node_path3.default.dirname(this.filePath), { recursive: true });
+      await (0, import_promises3.writeFile)(this.filePath, serialized, "utf8");
     });
     await this.writeQueue;
   }
@@ -3923,7 +4254,14 @@ var updater;
 var tray;
 var client;
 var store;
+var appStore;
+var logger;
+var dashboardWindow;
 var connected = false;
+var hasConnected = false;
+var lastConnectedAt;
+var lastDisconnectedAt;
+var lastConnectionError;
 var devices = /* @__PURE__ */ new Map();
 import_electron.app.setAppUserModelId(APP_ID);
 var ICON_PNG = {
@@ -3962,88 +4300,220 @@ function getDisplayDevices() {
 }
 function updateTray() {
   const listed = getDisplayDevices();
+  const t = translator(appStore?.settings.language ?? "tr");
   const active = listed.find((device) => !device.charging && device.percentage !== void 0) ?? listed.find((device) => device.percentage !== void 0);
   tray.setImage(makeTrayIcon(active?.percentage, active?.charging));
   tray.setToolTip(
     listed.length ? listed.map((device) => {
-      const level = device.percentage === void 0 ? "Bilinmiyor" : `%${device.percentage}`;
-      return `${device.name}: ${level}${device.charging ? " \xB7 \u015Earj oluyor" : ""}`;
-    }).join("\n") : connected ? "G HUB ba\u011Fl\u0131 \xB7 Pil destekli cihaz bulunamad\u0131" : "G HUB ba\u011Flant\u0131s\u0131 bekleniyor"
+      const level = device.percentage === void 0 ? t("unknownBattery") : `%${device.percentage}`;
+      return `${device.name}: ${level}${device.charging ? ` \xB7 ${t("charging")}` : ""}`;
+    }).join("\n") : connected ? `${t("connected")} \xB7 ${t("noDevices")}` : t("waiting")
   );
   const deviceItems = listed.length ? listed.map((device) => ({
-    label: `${device.name} \u2014 ${device.percentage === void 0 ? "Pil bilinmiyor" : `%${device.percentage}`}${device.charging ? " \u26A1" : ""}`,
+    label: `${device.name} \u2014 ${device.percentage === void 0 ? t("unknownBattery") : `%${device.percentage}`}${device.charging ? " \u26A1" : ""}`,
     icon: makeBatteryLevelIcon(device.percentage),
     enabled: false
-  })) : [{ label: "Pil destekli cihaz bulunamad\u0131", enabled: false }];
+  })) : [{ label: t("noDevices"), enabled: false }];
   tray.setContextMenu(
     import_electron.Menu.buildFromTemplate([
       {
-        label: connected ? "G HUB ba\u011Fl\u0131" : "G HUB bekleniyor",
+        label: connected ? t("connected") : t("waiting"),
         icon: makeConnectionIcon(connected),
         enabled: false
       },
       { type: "separator" },
       ...deviceItems,
       { type: "separator" },
-      { label: "\u015Eimdi yenile", click: () => client.refresh() },
+      { label: t("dashboard"), click: () => {
+        void openDashboard();
+      } },
+      { label: t("refresh"), click: () => client.refresh() },
       {
-        label: updater.status().phase === "checking" ? "G\xFCncelleme denetleniyor\u2026" : "G\xFCncellemeleri denetle",
+        label: t("launchAtStartup"),
+        type: "checkbox",
+        checked: appStore?.settings.launchAtStartup ?? false,
+        click: (item) => {
+          void updateSettings({ launchAtStartup: item.checked });
+        }
+      },
+      {
+        label: t("language"),
+        submenu: [
+          { label: "T\xFCrk\xE7e", type: "radio", checked: appStore?.settings.language === "tr", click: () => {
+            void updateSettings({ language: "tr" });
+          } },
+          { label: "English", type: "radio", checked: appStore?.settings.language === "en", click: () => {
+            void updateSettings({ language: "en" });
+          } }
+        ]
+      },
+      {
+        label: updater.status().phase === "checking" ? t("checkingUpdates") : t("checkUpdates"),
         enabled: updater.status().phase !== "checking",
         click: () => {
           void updater.check();
         }
       },
-      ...updater.status().phase === "ready" ? [{ label: `G\xFCncelleme haz\u0131r (${updater.status().detail}) \xB7 Yeniden ba\u015Flat`, click: () => updater.restart() }] : [],
-      ...updater.status().phase === "error" ? [{ label: `G\xFCncelleme hatas\u0131: ${updater.status().detail}`, enabled: false }] : [],
+      ...updater.status().phase === "ready" ? [{ label: `${t("updateReady")} (${updater.status().detail}) \xB7 ${t("restart")}`, click: () => updater.restart() }] : [],
+      ...updater.status().phase === "error" ? [{ label: `${t("updateError")}: ${updater.status().detail}`, enabled: false }] : [],
       {
-        label: "G HUB'\u0131 a\xE7",
-        click: () => import_electron.shell.openPath(import_node_path2.default.join(process.env.ProgramFiles ?? "C:\\Program Files", "LGHUB", "lghub.exe"))
+        label: t("openGHub"),
+        click: () => import_electron.shell.openPath(import_node_path4.default.join(process.env.ProgramFiles ?? "C:\\Program Files", "LGHUB", "lghub.exe"))
       },
       { type: "separator" },
-      { label: "\xC7\u0131k\u0131\u015F", click: () => import_electron.app.quit() }
+      { label: t("exit"), click: () => import_electron.app.quit() }
     ])
   );
 }
+function applyLaunchAtStartup(enabled) {
+  if (process.platform !== "win32") return;
+  const executablePath = process.env.PORTABLE_EXECUTABLE_FILE ?? process.execPath;
+  import_electron.app.setLoginItemSettings({
+    openAtLogin: enabled,
+    path: executablePath,
+    args: process.defaultApp ? [import_electron.app.getAppPath()] : []
+  });
+}
+async function updateSettings(patch) {
+  const settings = await appStore.updateSettings(patch);
+  if (patch.launchAtStartup !== void 0) applyLaunchAtStartup(settings.launchAtStartup);
+  updateTray();
+  await pushDashboardState();
+}
+function dashboardState() {
+  return {
+    app: { name: "Logitech Battery API", version: import_electron.app.getVersion() },
+    settings: appStore.settings,
+    history: appStore.history,
+    devices: getDisplayDevices(),
+    connection: { connected, lastConnectedAt, lastDisconnectedAt, lastError: lastConnectionError },
+    update: updater.status(),
+    diagnostics: {
+      platform: process.platform,
+      arch: process.arch,
+      electron: process.versions.electron,
+      node: process.versions.node,
+      userData: import_electron.app.getPath("userData"),
+      logPath: logger.filePath
+    }
+  };
+}
+async function pushDashboardState() {
+  if (!dashboardWindow || dashboardWindow.isDestroyed()) return;
+  dashboardWindow.webContents.send("dashboard:state", dashboardState());
+}
+function diagnosticsText() {
+  return JSON.stringify({ generatedAt: (/* @__PURE__ */ new Date()).toISOString(), ...dashboardState() }, null, 2);
+}
+function registerDashboardIpc() {
+  import_electron.ipcMain.removeHandler("dashboard:get-state");
+  import_electron.ipcMain.removeHandler("dashboard:update-settings");
+  import_electron.ipcMain.removeHandler("dashboard:refresh");
+  import_electron.ipcMain.removeHandler("dashboard:reconnect");
+  import_electron.ipcMain.removeHandler("dashboard:check-update");
+  import_electron.ipcMain.removeHandler("dashboard:restart-update");
+  import_electron.ipcMain.removeHandler("dashboard:clear-history");
+  import_electron.ipcMain.removeHandler("dashboard:open-log");
+  import_electron.ipcMain.removeHandler("dashboard:copy-diagnostics");
+  import_electron.ipcMain.handle("dashboard:get-state", () => dashboardState());
+  import_electron.ipcMain.handle("dashboard:update-settings", async (_event, patch) => updateSettings(patch));
+  import_electron.ipcMain.handle("dashboard:refresh", () => client.refresh());
+  import_electron.ipcMain.handle("dashboard:reconnect", () => client.reconnect());
+  import_electron.ipcMain.handle("dashboard:check-update", () => updater.check());
+  import_electron.ipcMain.handle("dashboard:restart-update", () => updater.restart());
+  import_electron.ipcMain.handle("dashboard:clear-history", async () => {
+    await appStore.clearHistory();
+    await pushDashboardState();
+  });
+  import_electron.ipcMain.handle("dashboard:open-log", () => import_electron.shell.showItemInFolder(logger.filePath));
+  import_electron.ipcMain.handle("dashboard:copy-diagnostics", () => import_electron.clipboard.writeText(diagnosticsText()));
+}
+async function openDashboard() {
+  if (dashboardWindow && !dashboardWindow.isDestroyed()) {
+    dashboardWindow.show();
+    dashboardWindow.focus();
+    await pushDashboardState();
+    return;
+  }
+  const preloadDirectory = import_node_path4.default.join(import_electron.app.getPath("userData"), "runtime");
+  const preloadPath = import_node_path4.default.join(preloadDirectory, "dashboard-preload.cjs");
+  await (0, import_promises4.mkdir)(preloadDirectory, { recursive: true });
+  await (0, import_promises4.writeFile)(preloadPath, DASHBOARD_PRELOAD, "utf8");
+  dashboardWindow = new import_electron.BrowserWindow({
+    width: 820,
+    height: 680,
+    minWidth: 620,
+    minHeight: 520,
+    show: false,
+    autoHideMenuBar: true,
+    backgroundColor: "#09090b",
+    title: "Logitech Battery API",
+    icon: makePngIcon("green"),
+    webPreferences: { preload: preloadPath, contextIsolation: true, nodeIntegration: false, sandbox: false }
+  });
+  dashboardWindow.on("closed", () => {
+    dashboardWindow = void 0;
+  });
+  dashboardWindow.webContents.on("did-finish-load", () => {
+    void pushDashboardState();
+  });
+  await dashboardWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(createDashboardHtml())}`);
+  dashboardWindow.show();
+}
 function notify(device, event) {
+  const english = appStore.settings.language === "en";
   let title = device.name;
   let body = "";
   switch (event.type) {
     case "charging":
-      title = `${device.name} \u015Farja tak\u0131ld\u0131`;
-      body = `Mevcut pil seviyesi: %${event.percentage}`;
+      title = english ? `${device.name} started charging` : `${device.name} \u015Farja tak\u0131ld\u0131`;
+      body = english ? `Current battery level: ${event.percentage}%` : `Mevcut pil seviyesi: %${event.percentage}`;
       break;
     case "full":
-      title = `${device.name} tamamen \u015Farj oldu`;
-      body = "Pil seviyesi %100. \u015Earj kablosunu \xE7\u0131karabilirsin.";
+      title = english ? `${device.name} is fully charged` : `${device.name} tamamen \u015Farj oldu`;
+      body = english ? "Battery is at 100%. You can disconnect the charging cable." : "Pil seviyesi %100. \u015Earj kablosunu \xE7\u0131karabilirsin.";
       break;
     case "low":
-      title = `${device.name} pili azal\u0131yor`;
-      body = `Pil seviyesi %${event.percentage}; %${event.threshold} e\u015Fi\u011Fine ula\u015Ft\u0131.`;
+      title = english ? `${device.name} battery is low` : `${device.name} pili azal\u0131yor`;
+      body = english ? `Battery is at ${event.percentage}% and reached the ${event.threshold}% threshold.` : `Pil seviyesi %${event.percentage}; %${event.threshold} e\u015Fi\u011Fine ula\u015Ft\u0131.`;
       break;
     case "empty":
-      title = `${device.name} pili bitti`;
-      body = "Pil seviyesi %0. Cihaz\u0131 \u015Farja takmal\u0131s\u0131n.";
+      title = english ? `${device.name} battery is empty` : `${device.name} pili bitti`;
+      body = english ? "Battery is at 0%. Connect the device to a charger." : "Pil seviyesi %0. Cihaz\u0131 \u015Farja takmal\u0131s\u0131n.";
       break;
   }
   if (import_electron.Notification.isSupported()) {
     new import_electron.Notification({ title, body, urgency: event.type === "empty" ? "critical" : "normal" }).show();
   }
 }
+function notifyConnection(title, body) {
+  if (import_electron.Notification.isSupported()) new import_electron.Notification({ title, body }).show();
+}
 function registerDevices(infos) {
+  const t = translator(appStore.settings.language);
   const currentIds = new Set(infos.map((info) => info.id));
-  for (const id of devices.keys()) {
-    if (!currentIds.has(id)) devices.delete(id);
+  for (const [id, device] of devices) {
+    if (!currentIds.has(id) && device.connected) {
+      device.connected = false;
+      if (appStore.settings.notifyDisconnect) {
+        notifyConnection(t("deviceOfflineTitle"), t("deviceOfflineBody", { device: device.name }));
+      }
+    }
   }
   for (const info of infos) {
     if (!info.capabilities?.hasBatteryStatus) continue;
     const name = info.extendedDisplayName ?? info.displayName ?? info.deviceModel ?? "Logitech cihaz\u0131";
     const old = devices.get(info.id);
+    const nextConnected = info.isConnected !== false;
+    if (old?.connected && !nextConnected && appStore.settings.notifyDisconnect) {
+      notifyConnection(t("deviceOfflineTitle"), t("deviceOfflineBody", { device: name }));
+    }
     devices.set(info.id, {
       id: info.id,
       stableKey: info.id,
       name,
       model: info.deviceModel ?? "unknown",
-      connected: info.isConnected !== false,
+      connected: nextConnected,
       charging: old?.charging ?? false,
       fullyCharged: old?.fullyCharged ?? false,
       percentage: old?.percentage,
@@ -4052,57 +4522,100 @@ function registerDevices(infos) {
     });
   }
   updateTray();
+  void pushDashboardState();
 }
 async function updateBattery(payload) {
   const device = devices.get(payload.deviceId);
   if (!device || !Number.isFinite(payload.percentage)) return;
   device.percentage = Math.max(0, Math.min(100, Math.round(payload.percentage)));
+  device.connected = true;
   device.charging = Boolean(payload.charging);
   device.fullyCharged = Boolean(payload.fullyCharged || device.percentage >= 100);
   device.mileage = payload.mileage;
   device.updatedAt = Date.now();
   const result = detectBatteryEvents(store.get(device.stableKey), { ...payload, percentage: device.percentage });
   await store.set(device.stableKey, result.state);
+  await appStore.recordBattery(device);
   for (const event of result.events) notify(device, event);
   updateTray();
+  await pushDashboardState();
 }
 function startApp(controller) {
   updater = controller;
   updater.onStatus(() => {
     if (tray && !tray.isDestroyed()) updateTray();
+    void pushDashboardState();
   });
   void import_electron.app.whenReady().then(async () => {
-    store = new StateStore(import_electron.app.getPath("userData"));
-    await store.load();
+    const userData = import_electron.app.getPath("userData");
+    store = new StateStore(userData);
+    appStore = new AppStore(userData);
+    logger = new AppLogger(userData);
+    await Promise.all([store.load(), appStore.load()]);
+    applyLaunchAtStartup(appStore.settings.launchAtStartup);
+    registerDashboardIpc();
+    logger.info(`Application started (${import_electron.app.getVersion()})`);
     tray = new import_electron.Tray(makeTrayIcon());
     tray.setIgnoreDoubleClickEvents(true);
+    tray.on("click", () => {
+      void openDashboard().catch((error) => logger.error("Dashboard could not open", error));
+    });
     updateTray();
     client = new GHubClient();
     client.on("connected", () => {
       connected = true;
+      hasConnected = true;
+      lastConnectedAt = Date.now();
+      lastConnectionError = void 0;
+      logger.info("Connected to G HUB");
       updateTray();
+      void pushDashboardState();
     });
     client.on("disconnected", () => {
+      const shouldNotify = connected && hasConnected && appStore.settings.notifyDisconnect;
       connected = false;
-      devices.clear();
+      lastDisconnectedAt = Date.now();
+      for (const device of devices.values()) device.connected = false;
+      logger.info("Disconnected from G HUB; reconnect scheduled");
+      if (shouldNotify) {
+        const t = translator(appStore.settings.language);
+        notifyConnection(t("disconnectedTitle"), t("disconnectedBody"));
+      }
       updateTray();
+      void pushDashboardState();
     });
     client.on("devices", registerDevices);
     client.on("battery", (payload) => {
       void updateBattery(payload).catch((error) => {
-        console.error("Pil durumu kaydedilemedi:", error);
+        logger.error("Battery state could not be saved", error);
       });
     });
-    client.on("error", () => {
-      connected = false;
-      updateTray();
+    client.on("error", (error) => {
+      lastConnectionError = error.message;
+      logger.error("G HUB WebSocket error", error);
+      void pushDashboardState();
     });
     client.start();
+    import_electron.app.on("second-instance", () => {
+      void openDashboard();
+    });
   }).catch((error) => {
     console.error("Ba\u015Flatma hatas\u0131:", error);
+    logger?.error("Application startup failed", error);
   });
 }
-import_electron.app.on("before-quit", () => client?.stop());
+import_electron.app.on("before-quit", () => {
+  client?.stop();
+  import_electron.ipcMain.removeHandler("dashboard:get-state");
+  import_electron.ipcMain.removeHandler("dashboard:update-settings");
+  import_electron.ipcMain.removeHandler("dashboard:refresh");
+  import_electron.ipcMain.removeHandler("dashboard:reconnect");
+  import_electron.ipcMain.removeHandler("dashboard:check-update");
+  import_electron.ipcMain.removeHandler("dashboard:restart-update");
+  import_electron.ipcMain.removeHandler("dashboard:clear-history");
+  import_electron.ipcMain.removeHandler("dashboard:open-log");
+  import_electron.ipcMain.removeHandler("dashboard:copy-diagnostics");
+});
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
   startApp
