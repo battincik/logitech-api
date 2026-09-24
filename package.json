@@ -1,7 +1,7 @@
 {
-  "name": "ghub-battery-tray",
-  "version": "1.0.0",
-  "author": "Bahattin",
+  "name": "logitech-battery-api",
+  "version": "1.1.0",
+  "author": "Battincik",
   "description": "Logitech G HUB cihazlarının pil durumunu Windows sistem tepsisinde gösterir.",
   "main": "dist/bootstrap.js",
   "type": "commonjs",
@@ -31,12 +31,12 @@
     "yauzl": "^3.3.1"
   },
   "build": {
-    "appId": "net.coreor.ghubbatterytray",
-    "productName": "G HUB Battery Tray",
+    "appId": "com.battincik.logitechbatteryapi",
+    "productName": "Logitech Battery API",
     "directories": {
       "output": "release"
     },
-    "artifactName": "G-HUB-Battery-Tray-${version}-${arch}.${ext}",
+    "artifactName": "Logitech-Battery-API-${version}-${arch}.${ext}",
     "asar": true,
     "files": [
       "dist/**/*",

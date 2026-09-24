@@ -1,4 +1,4 @@
-# G HUB Battery Tray
+# Logitech Battery API
 
 Logitech G HUB'ın yerel WebSocket servisini kullanarak pil destekli Logitech G cihazlarını Windows sistem tepsisinde gösterir. Pil seviyelerini ve şarj durumunu görüntüler; %20, %10, %5, %3 ve %0 eşiklerinde bildirim gönderir.
 
@@ -20,7 +20,7 @@ npm test
 npm run dist
 ```
 
-`release/G-HUB-Battery-Tray-1.0.0-x64.exe` taşınabilir başlangıç uygulamasıdır. İlk dağıtım için bu dosyayı bir kez kullanıcılara iletmek gerekir; sonraki JavaScript güncellemeleri uygulama içinden gelir. Eski NSIS kurulumundan geçişte bu yeni taşınabilir uygulamayı bir kez indirip açın. Güncellemeler Electron'un kendisini, native modülleri veya taşınabilir exe'yi değiştirmez; bu tür değişiklikler için yeni exe gerekir.
+`release/Logitech-Battery-API-1.1.0-x64.exe` taşınabilir başlangıç uygulamasıdır. İlk dağıtım için bu dosyayı bir kez kullanıcılara iletmek gerekir; sonraki JavaScript güncellemeleri uygulama içinden gelir. Eski NSIS kurulumundan geçişte bu yeni taşınabilir uygulamayı bir kez indirip açın. Güncellemeler Electron'un kendisini, native modülleri veya taşınabilir exe'yi değiştirmez; bu tür değişiklikler için yeni exe gerekir.
 
 ## Commit üzerinden güncelleme
 
