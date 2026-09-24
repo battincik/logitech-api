@@ -61,6 +61,45 @@ function makeTrayIcon(percentage?: number, charging = false) {
   return image.resize({ width: 16, height: 16 });
 }
 
+function getBatteryLevelColor(percentage?: number): string {
+  if (percentage === undefined) return "#71717a";
+  if (percentage <= 5) return "#ef4444";
+  if (percentage <= 20) return "#f97316";
+  if (percentage <= 50) return "#eab308";
+  return "#22c55e";
+}
+
+function makeBatteryLevelIcon(percentage?: number, charging = false) {
+  const safePercentage = Math.max(0, Math.min(100, percentage ?? 0));
+  const fillHeight = Math.round((safePercentage / 100) * 12);
+  const fillY = 16 - fillHeight;
+  const color = getBatteryLevelColor(percentage);
+  const outline = charging ? "#38bdf8" : color;
+  const svg = `
+    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 20 20">
+      <defs>
+        <clipPath id="level"><circle cx="10" cy="10" r="6"/></clipPath>
+      </defs>
+      <circle cx="10" cy="10" r="6" fill="#27272a" stroke="#a1a1aa" stroke-width="1.5"/>
+      <rect x="4" y="${fillY}" width="12" height="${fillHeight}" fill="${color}" clip-path="url(#level)"/>
+      <circle cx="10" cy="10" r="6" fill="none" stroke="${outline}" stroke-width="1.5"/>
+    </svg>`;
+  return nativeImage
+    .createFromDataURL(`data:image/svg+xml;base64,${Buffer.from(svg).toString("base64")}`)
+    .resize({ width: 16, height: 16 });
+}
+
+function makeConnectionIcon(isConnected: boolean) {
+  const color = isConnected ? "#22c55e" : "#71717a";
+  const svg = `
+    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">
+      <circle cx="8" cy="8" r="5" fill="${color}" stroke="#ffffff" stroke-opacity="0.45"/>
+    </svg>`;
+  return nativeImage.createFromDataURL(
+    `data:image/svg+xml;base64,${Buffer.from(svg).toString("base64")}`,
+  );
+}
+
 function getDisplayDevices(): BatteryDevice[] {
   return [...devices.values()].sort((a, b) => {
     if (a.percentage === undefined) return 1;
@@ -94,6 +133,7 @@ function updateTray(): void {
         label: `${device.name} — ${
           device.percentage === undefined ? "Pil bilinmiyor" : `%${device.percentage}`
         }${device.charging ? " ⚡" : ""}`,
+        icon: makeBatteryLevelIcon(device.percentage, device.charging),
         enabled: false,
       }))
     : [{ label: "Pil destekli cihaz bulunamadı", enabled: false }];
@@ -101,7 +141,8 @@ function updateTray(): void {
   tray.setContextMenu(
     Menu.buildFromTemplate([
       {
-        label: connected ? "● G HUB bağlı" : "○ G HUB bekleniyor",
+        label: connected ? "G HUB bağlı" : "G HUB bekleniyor",
+        icon: makeConnectionIcon(connected),
         enabled: false,
       },
       { type: "separator" },
