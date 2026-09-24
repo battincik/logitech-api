@@ -18,10 +18,6 @@ test("ilk okumada bildirim üretmez", () => {
   assert.deepEqual(detectBatteryEvents(undefined, payload(18)).events, []);
 });
 
-test("ilk okuma şarj durumundaysa bildirir", () => {
-  assert.equal(detectBatteryEvents(undefined, payload(18, true)).events[0]?.type, "charging");
-});
-
 test("düşük pil eşiğini yalnız bir kez bildirir", () => {
   const first = detectBatteryEvents(initialStoredState(payload(21)), payload(20));
   assert.equal(first.events[0]?.type, "low");

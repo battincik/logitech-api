@@ -17,12 +17,7 @@ export function detectBatteryEvents(
   current: BatteryPayload,
 ): { state: StoredBatteryState; events: BatteryEvent[] } {
   if (!previous) {
-    return {
-      state: initialStoredState(current),
-      events: current.charging
-        ? [{ type: "charging", percentage: Math.max(0, Math.min(100, Math.round(current.percentage))) }]
-        : [],
-    };
+    return { state: initialStoredState(current), events: [] };
   }
 
   const percentage = Math.max(0, Math.min(100, Math.round(current.percentage)));

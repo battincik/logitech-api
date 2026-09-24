@@ -34,6 +34,7 @@ export class GHubClient extends EventEmitter<GHubClientEvents> {
   private stopped = false;
 
   start(): void {
+    if (this.socket && this.socket.readyState !== WebSocket.CLOSED) return;
     this.stopped = false;
     this.connect();
   }
@@ -43,6 +44,7 @@ export class GHubClient extends EventEmitter<GHubClientEvents> {
     clearTimeout(this.reconnectTimer);
     clearInterval(this.pollTimer);
     this.socket?.close();
+    this.socket = undefined;
   }
 
   refresh(): void {
@@ -63,8 +65,8 @@ export class GHubClient extends EventEmitter<GHubClientEvents> {
     this.socket.on("open", () => {
       this.reconnectDelay = 2_000;
       this.emit("connected");
-      this.subscribe();
       this.refresh();
+      this.subscribe();
 
       clearInterval(this.pollTimer);
       this.pollTimer = setInterval(() => this.refresh(), 60_000);
@@ -97,9 +99,6 @@ export class GHubClient extends EventEmitter<GHubClientEvents> {
 
   private subscribe(): void {
     this.send("SUBSCRIBE", "/battery/state/changed");
-    this.send("SUBSCRIBE", "/devices/state/changed");
-    this.send("SUBSCRIBE", "/devices/options/device_arrival");
-    this.send("SUBSCRIBE", "/devices/options/device_removal");
   }
 
   private handleMessage(raw: string): void {
@@ -122,17 +121,6 @@ export class GHubClient extends EventEmitter<GHubClientEvents> {
       return;
     }
 
-    if (
-      message.verb === "BROADCAST" &&
-      (message.path === "/devices/state/changed" ||
-        message.path === "/devices/options/device_arrival" ||
-        message.path === "/devices/options/device_removal")
-    ) {
-      this.send("SUBSCRIBE", message.path);
-      this.refresh();
-      return;
-    }
-
     const isBatteryResponse =
       message.path?.startsWith("/battery/") &&
       message.path.endsWith("/state") &&
@@ -141,9 +129,7 @@ export class GHubClient extends EventEmitter<GHubClientEvents> {
 
     if ((isBatteryResponse || isBatteryBroadcast) && message.payload) {
       const { percentage } = message.payload;
-      const deviceId =
-        message.payload.deviceId ??
-        (isBatteryResponse ? message.path?.split("/")[2] : undefined);
+      const deviceId = message.payload.deviceId ?? (isBatteryResponse ? message.path?.split("/")[2] : undefined);
       if (typeof deviceId === "string" && typeof percentage === "number") {
         this.emit("battery", {
           deviceId,
@@ -155,9 +141,6 @@ export class GHubClient extends EventEmitter<GHubClientEvents> {
         });
       }
 
-      if (isBatteryBroadcast && message.verb === "BROADCAST") {
-        this.send("SUBSCRIBE", "/battery/state/changed");
-      }
     }
   }
 }

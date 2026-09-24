@@ -3,27 +3,30 @@
   "version": "1.0.0",
   "author": "Bahattin",
   "description": "Logitech G HUB cihazlarının pil durumunu Windows sistem tepsisinde gösterir.",
-  "main": "dist/main.js",
+  "main": "dist/bootstrap.js",
   "type": "commonjs",
   "scripts": {
-    "build": "tsc -p tsconfig.json",
-    "dev": "npm run build && electron .",
+    "build": "tsc -p tsconfig.json && pnpm build:update",
+    "dev": "pnpm build && electron .",
     "start": "electron .",
-    "test": "npm run build && node --test dist/battery-events.test.js",
-    "dist": "npm run build && electron-builder --win nsis"
+    "test": "pnpm build && node --test dist/*.test.js",
+    "dist": "pnpm build && electron-builder --win portable",
+    "build:update": "node scripts/build-update.cjs"
   },
   "engines": {
     "node": ">=20"
   },
+  "packageManager": "pnpm@10.17.1",
   "dependencies": {
     "ws": "^8.18.3"
   },
   "devDependencies": {
     "@types/node": "^24.5.2",
     "@types/ws": "^8.18.1",
-    "electron": "^44.4.5",
-    "electron-builder": "^26.15.3",
-    "typescript": "^5.9.2"
+    "electron": "^38.1.2",
+    "electron-builder": "^26.0.12",
+    "typescript": "^5.9.2",
+    "esbuild": "^0.25.12"
   },
   "build": {
     "appId": "net.coreor.ghubbatterytray",
@@ -31,28 +34,25 @@
     "directories": {
       "output": "release"
     },
-    "artifactName": "G-HUB-Battery-Tray-Setup-${version}.${ext}",
+    "artifactName": "G-HUB-Battery-Tray-${version}-${arch}.${ext}",
     "asar": true,
     "files": [
       "dist/**/*",
       "!dist/**/*.test.js",
+      "updates/app.cjs",
+      "updater-config.json",
       "package.json"
     ],
     "win": {
       "target": [
         {
-          "target": "nsis",
+          "target": "portable",
           "arch": [
             "x64"
           ]
         }
       ]
-    },
-    "nsis": {
-      "oneClick": false,
-      "allowToChangeInstallationDirectory": true,
-      "createDesktopShortcut": false,
-      "createStartMenuShortcut": true
     }
-  }
+  },
+  "dev": "pnpm build && electron ."
 }

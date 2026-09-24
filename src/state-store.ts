@@ -26,7 +26,7 @@ export class StateStore {
   async set(key: string, state: StoredBatteryState): Promise<void> {
     this.states[key] = state;
     const serialized = JSON.stringify(this.states, null, 2);
-    this.writeQueue = this.writeQueue.then(async () => {
+    this.writeQueue = this.writeQueue.catch(() => {}).then(async () => {
       await mkdir(path.dirname(this.filePath), { recursive: true });
       await writeFile(this.filePath, serialized, "utf8");
     });
