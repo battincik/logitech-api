@@ -6,17 +6,16 @@
   "main": "dist/bootstrap.js",
   "type": "commonjs",
   "scripts": {
-    "build": "tsc -p tsconfig.json && pnpm build:update",
-    "dev": "pnpm build && electron .",
+    "build": "tsc -p tsconfig.json && npm run build:update",
+    "dev": "npm run build && electron .",
     "start": "electron .",
-    "test": "pnpm build && node --test dist/*.test.js",
-    "dist": "pnpm build && electron-builder --win portable",
+    "test": "npm run build && node --test dist/*.test.js",
+    "dist": "npm run build && electron-builder --win portable",
     "build:update": "node scripts/build-update.cjs"
   },
   "engines": {
     "node": ">=20"
   },
-  "packageManager": "pnpm@10.17.1",
   "dependencies": {
     "ws": "^8.18.3"
   },
@@ -53,6 +52,5 @@
         }
       ]
     }
-  },
-  "dev": "pnpm build && electron ."
+  }
 }
