@@ -3918,7 +3918,7 @@ var StateStore = class {
 };
 
 // src/main.ts
-var APP_ID = "net.coreor.ghubbatterytray";
+var APP_ID = "com.battincik.logitechbatteryapi";
 var updater;
 var tray;
 var client;
