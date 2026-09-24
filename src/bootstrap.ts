@@ -30,16 +30,16 @@ else {
       (require(candidate) as Application).startApp(controller);
     } catch (error) {
       if (candidate === bundled) throw error;
-      console.error("Güncelleme yüklenemedi, paketlenmiş sürüme dönülüyor:", error);
+      console.error("The update could not be loaded; falling back to the bundled version:", error);
       void updater.discard();
       (require(bundled) as Application).startApp(controller);
     }
     updater.start();
     app.on("before-quit", () => updater.stop());
   } catch (error) {
-    console.error("Uygulama başlatılamadı:", error);
+    console.error("The application could not be started:", error);
     void app.whenReady().then(() => {
-      dialog.showErrorBox("Logitech Battery API", `Uygulama başlatılamadı: ${String(error)}`);
+      dialog.showErrorBox("Logitech Battery API", `The application could not be started: ${String(error)}`);
       app.quit();
     });
   }

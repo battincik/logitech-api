@@ -51,6 +51,11 @@ export class GHubClient extends EventEmitter<GHubClientEvents> {
     this.send("GET", "/devices/list");
   }
 
+  reconnect(): void {
+    this.stop();
+    setTimeout(() => this.start(), 250);
+  }
+
   private connect(): void {
     if (this.stopped) return;
 

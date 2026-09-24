@@ -10,7 +10,10 @@ const commit = "a".repeat(40);
 
 function mockFetch(bytes: Buffer, sha = gitBlobSha(bytes)): typeof fetch {
   return (async (url: string | URL | Request) => {
-    if (String(url).includes("/commits?")) return Response.json([{ sha: commit }]);
+    if (String(url).includes("/commits?")) return Response.json([{
+      sha: commit,
+      commit: { message: "feat: test update", author: { date: "2026-09-24T00:00:00Z" } },
+    }]);
     assert.match(String(url), new RegExp(`ref=${commit}$`));
     return Response.json({ type: "file", encoding: "base64", sha, content: bytes.toString("base64") });
   }) as typeof fetch;
@@ -27,6 +30,8 @@ test("commit paketi doğrulanır, indirilir ve tekrar indirilmeksizin kullanıl�
     assert.deepEqual(await readFile(updater.target), bytes);
     assert.equal(await updater.check(), true);
     assert.equal(updater.status.phase, "ready");
+    assert.equal(updater.status.commit, commit.slice(0, 7));
+    assert.equal(updater.status.message, "feat: test update");
   } finally { await rm(dir, { recursive: true, force: true }); }
 });
 

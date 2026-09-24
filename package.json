@@ -2,7 +2,7 @@
   "name": "logitech-battery-api",
   "version": "1.1.0",
   "author": "Battincik",
-  "description": "Logitech G HUB cihazlarının pil durumunu Windows sistem tepsisinde gösterir.",
+  "description": "A lightweight Windows tray app for Logitech G HUB battery monitoring, history, notifications, diagnostics, and commit-based updates.",
   "main": "dist/bootstrap.js",
   "type": "commonjs",
   "scripts": {

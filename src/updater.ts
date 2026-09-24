@@ -6,7 +6,14 @@ const MAX_BUNDLE_BYTES = 1_000_000;
 const SHA_RE = /^[a-f0-9]{40}$/i;
 
 export interface UpdateConfig { owner: string; repo: string; branch: string }
-export interface UpdateStatus { phase: "idle" | "checking" | "ready" | "error"; detail?: string }
+export interface UpdateStatus {
+  phase: "idle" | "checking" | "ready" | "error";
+  detail?: string;
+  commit?: string;
+  message?: string;
+  checkedAt?: number;
+  publishedAt?: string;
+}
 
 export function gitBlobSha(content: Buffer): string {
   return createHash("sha1").update(`blob ${content.length}\0`).update(content).digest("hex");
@@ -28,7 +35,7 @@ export class CommitUpdater {
     this.target = path.join(dataDir, "updates", "app.cjs");
     if (![config.owner, config.repo, config.branch].every((value) => /^[\w.-]+$/.test(value)) ||
       config.owner === "." || config.repo === "." || config.branch === ".") {
-      throw new Error("Geçersiz GitHub güncelleme yapılandırması");
+      throw new Error("Invalid GitHub update configuration");
     }
   }
 
@@ -38,7 +45,7 @@ export class CommitUpdater {
   }
 
   start(): void {
-    // Tepsi ve G HUB bağlantısı önce açılsın.
+    // Let the tray and G HUB connection initialize first.
     this.timer = setTimeout(() => {
       void this.check();
       this.timer = setInterval(() => void this.check(), 6 * 60 * 60 * 1000);
@@ -57,31 +64,38 @@ export class CommitUpdater {
     this.setStatus({ phase: "checking" });
     try {
       const base = `https://api.github.com/repos/${this.config.owner}/${this.config.repo}`;
-      const headers = { Accept: "application/vnd.github+json", "User-Agent": "ghub-battery-tray" };
+      const headers = { Accept: "application/vnd.github+json", "User-Agent": "logitech-battery-api" };
       const commits = await this.request(`${base}/commits?path=updates%2Fapp.cjs&sha=${encodeURIComponent(this.config.branch)}&per_page=1`, { headers, signal: AbortSignal.timeout(15_000) });
       if (!commits.ok) throw new Error(`GitHub commits: HTTP ${commits.status}`);
       const entries: unknown = await commits.json();
-      const commit = Array.isArray(entries) ? entries[0]?.sha : undefined;
-      if (typeof commit !== "string" || !SHA_RE.test(commit)) throw new Error("Güncelleme commit'i bulunamadı");
+      const commitEntry = Array.isArray(entries) ? entries[0] : undefined;
+      const commit = isCommit(commitEntry) ? commitEntry.sha : undefined;
+      if (typeof commit !== "string" || !SHA_RE.test(commit)) throw new Error("Update commit not found");
+      const updateMeta = {
+        commit: commit.slice(0, 7),
+        message: isCommit(commitEntry) ? commitEntry.commit.message.split("\n")[0] : undefined,
+        publishedAt: isCommit(commitEntry) ? commitEntry.commit.author?.date : undefined,
+        checkedAt: Date.now(),
+      };
 
       const response = await this.request(`${base}/contents/updates/app.cjs?ref=${commit}`, { headers, signal: AbortSignal.timeout(30_000) });
-      if (!response.ok) throw new Error(`GitHub içerik: HTTP ${response.status}`);
+      if (!response.ok) throw new Error(`GitHub content: HTTP ${response.status}`);
       const entry: unknown = await response.json();
-      if (!isContent(entry)) throw new Error("Geçersiz GitHub paket yanıtı");
+      if (!isContent(entry)) throw new Error("Invalid GitHub bundle response");
       const bytes = Buffer.from(entry.content.replace(/\s/g, ""), "base64");
       if (!bytes.length || bytes.length > MAX_BUNDLE_BYTES || gitBlobSha(bytes) !== entry.sha) {
-        throw new Error("Güncelleme paketi doğrulanamadı");
+        throw new Error("Update bundle validation failed");
       }
       const shipped = await readFile(this.bundledPath);
       if (gitBlobSha(shipped) === entry.sha) {
         await this.discard();
-        this.setStatus({ phase: "idle", detail: "Güncel" });
+        this.setStatus({ phase: "idle", detail: "Up to date", ...updateMeta });
         return false;
       }
       try {
         const current = await readFile(this.target);
         if (gitBlobSha(current) === entry.sha) {
-          this.setStatus({ phase: "ready", detail: commit.slice(0, 7) });
+          this.setStatus({ phase: "ready", detail: commit.slice(0, 7), ...updateMeta });
           return true;
         }
       } catch (error) {
@@ -91,17 +105,17 @@ export class CommitUpdater {
       const temporary = `${this.target}.${process.pid}.tmp`;
       try {
         await writeFile(temporary, bytes, { flag: "wx" });
-        // Windows'ta mevcut dosyanın üzerine rename başarısız olabilir.
+        // Renaming over an existing file may fail on Windows.
         await unlink(this.target).catch((error: unknown) => { if (!isNotFound(error)) throw error; });
         await rename(temporary, this.target);
       } finally {
         await unlink(temporary).catch(() => {});
       }
-      this.setStatus({ phase: "ready", detail: commit.slice(0, 7) });
+      this.setStatus({ phase: "ready", detail: commit.slice(0, 7), ...updateMeta });
       return true;
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error);
-      this.setStatus({ phase: "error", detail });
+      this.setStatus({ phase: "error", detail, checkedAt: Date.now() });
       return false;
     }
   }
@@ -120,4 +134,15 @@ function isContent(value: unknown): value is { type: "file"; encoding: "base64";
     "encoding" in value && value.encoding === "base64" &&
     "sha" in value && typeof value.sha === "string" && SHA_RE.test(value.sha) &&
     "content" in value && typeof value.content === "string";
+}
+
+function isCommit(value: unknown): value is {
+  sha: string;
+  commit: { message: string; author?: { date?: string } };
+} {
+  if (typeof value !== "object" || value === null) return false;
+  const candidate = value as { sha?: unknown; commit?: unknown };
+  if (typeof candidate.sha !== "string" || !SHA_RE.test(candidate.sha)) return false;
+  if (typeof candidate.commit !== "object" || candidate.commit === null) return false;
+  return typeof (candidate.commit as { message?: unknown }).message === "string";
 }
