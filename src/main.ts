@@ -17,7 +17,7 @@ import type {
   GHubDeviceInfo,
 } from "./types";
 
-const APP_ID = "net.coreor.ghubbatterytray";
+const APP_ID = "com.battincik.logitechbatteryapi";
 interface UpdateController {
   check: () => Promise<boolean>;
   restart: () => void;
