@@ -221,6 +221,9 @@ function registerDashboardIpc(): void {
   ipcMain.removeHandler("dashboard:clear-history");
   ipcMain.removeHandler("dashboard:open-log");
   ipcMain.removeHandler("dashboard:copy-diagnostics");
+  ipcMain.removeHandler("dashboard:window-minimize");
+  ipcMain.removeHandler("dashboard:window-toggle-maximize");
+  ipcMain.removeHandler("dashboard:window-close");
   ipcMain.handle("dashboard:get-state", () => dashboardState());
   ipcMain.handle("dashboard:update-settings", async (_event, patch: Partial<AppSettings>) => updateSettings(patch));
   ipcMain.handle("dashboard:refresh", () => client.refresh());
@@ -230,6 +233,14 @@ function registerDashboardIpc(): void {
   ipcMain.handle("dashboard:clear-history", async () => { await appStore.clearHistory(); await pushDashboardState(); });
   ipcMain.handle("dashboard:open-log", () => shell.showItemInFolder(logger.filePath));
   ipcMain.handle("dashboard:copy-diagnostics", () => clipboard.writeText(diagnosticsText()));
+  ipcMain.handle("dashboard:window-minimize", (event) => BrowserWindow.fromWebContents(event.sender)?.minimize());
+  ipcMain.handle("dashboard:window-toggle-maximize", (event) => {
+    const window = BrowserWindow.fromWebContents(event.sender);
+    if (!window) return;
+    if (window.isMaximized()) window.unmaximize();
+    else window.maximize();
+  });
+  ipcMain.handle("dashboard:window-close", (event) => BrowserWindow.fromWebContents(event.sender)?.close());
 }
 
 async function openDashboard(): Promise<void> {
@@ -244,15 +255,15 @@ async function openDashboard(): Promise<void> {
   await mkdir(preloadDirectory, { recursive: true });
   await writeFile(preloadPath, DASHBOARD_PRELOAD, "utf8");
   dashboardWindow = new BrowserWindow({
-    width: 820,
-    height: 680,
-    minWidth: 620,
-    minHeight: 520,
+    width: 1120,
+    height: 760,
+    minWidth: 820,
+    minHeight: 600,
     show: false,
+    frame: false,
     autoHideMenuBar: true,
     backgroundColor: "#09090b",
     title: "Logitech Battery API",
-    icon: makePngIcon("green"),
     webPreferences: { preload: preloadPath, contextIsolation: true, nodeIntegration: false, sandbox: false },
   });
   dashboardWindow.on("closed", () => { dashboardWindow = undefined; });
@@ -425,4 +436,7 @@ app.on("before-quit", () => {
   ipcMain.removeHandler("dashboard:clear-history");
   ipcMain.removeHandler("dashboard:open-log");
   ipcMain.removeHandler("dashboard:copy-diagnostics");
+  ipcMain.removeHandler("dashboard:window-minimize");
+  ipcMain.removeHandler("dashboard:window-toggle-maximize");
+  ipcMain.removeHandler("dashboard:window-close");
 });
