@@ -110,7 +110,7 @@ export function createDashboardHtml(): string {
     }
     function renderDiagnostics() {
       const d=state.diagnostics;
-      document.getElementById('diagnostics-text').textContent=['App: '+state.app.name+' '+state.app.version,'Platform: '+d.platform+' '+d.arch,'Electron: '+d.electron,'Node: '+d.node,'G HUB: '+(state.connection.connected?'connected':'disconnected'),'Last connected: '+date(state.connection.lastConnectedAt),'Last disconnected: '+date(state.connection.lastDisconnectedAt),'Last error: '+(state.connection.lastError||'—'),'Devices: '+state.devices.length,'Update: '+state.update.phase,'User data: '+d.userData,'Log: '+d.logPath].join('\n');
+      document.getElementById('diagnostics-text').textContent=['App: '+state.app.name+' '+state.app.version,'Platform: '+d.platform+' '+d.arch,'Electron: '+d.electron,'Node: '+d.node,'G HUB: '+(state.connection.connected?'connected':'disconnected'),'Last connected: '+date(state.connection.lastConnectedAt),'Last disconnected: '+date(state.connection.lastDisconnectedAt),'Last error: '+(state.connection.lastError||'—'),'Devices: '+state.devices.length,'Update: '+state.update.phase,'User data: '+d.userData,'Log: '+d.logPath].join('\\n');
     }
     function renderSettings() {
       const s=state.settings;
