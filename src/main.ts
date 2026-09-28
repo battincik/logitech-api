@@ -9,7 +9,7 @@ import {
   shell,
   Tray,
 } from "electron";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { AppStore, type AppSettings } from "./app-store";
 import { detectBatteryEvents } from "./battery-events";
@@ -27,6 +27,8 @@ import type {
 } from "./types";
 
 const APP_ID = "com.battincik.logitechbatteryapi";
+const APP_NAME = "Logitech Developer Tool";
+const LEGACY_APP_NAME = "Logitech Battery API";
 interface UpdateController {
   check: () => Promise<boolean>;
   restart: () => void;
@@ -46,9 +48,32 @@ let hasConnected = false;
 let lastConnectedAt: number | undefined;
 let lastDisconnectedAt: number | undefined;
 let lastConnectionError: string | undefined;
+let reconnecting = true;
+let isQuitting = false;
 const devices = new Map<string, BatteryDevice>();
 
+app.setName(APP_NAME);
 app.setAppUserModelId(APP_ID);
+app.setPath("userData", path.join(app.getPath("appData"), LEGACY_APP_NAME));
+
+async function registerWindowsNotificationIdentity(): Promise<void> {
+  if (process.platform !== "win32" || !app.isPackaged) return;
+  const programsPath = path.join(
+    app.getPath("appData"),
+    "Microsoft",
+    "Windows",
+    "Start Menu",
+    "Programs",
+  );
+  const shortcutPath = path.join(programsPath, `${APP_NAME}.lnk`);
+  shell.writeShortcutLink(shortcutPath, "create", {
+    target: process.execPath,
+    cwd: path.dirname(process.execPath),
+    description: APP_NAME,
+    appUserModelId: APP_ID,
+  });
+  await unlink(path.join(programsPath, `${LEGACY_APP_NAME}.lnk`)).catch(() => undefined);
+}
 
 const ICON_PNG = {
   green: "iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAABvElEQVQ4y8XTz08TQRQH8O/s7jDQ1i7gLAk2NV5rPGA8uOUiHjgZ4M6Fv0EFTPgLVAT9F/on4I9TDxASbU1I9KJ4Fpsm7AS3urUdd7rPE6VFG5t48B1n8v3k5eU94H8XO/9ARHipqjMncbQammjuR6KnUpYIJpzMXtZJPV3yZg8YO4s558J2qV5+WNNq9XXjA2pthZ9kICx+KS+8Zd8tLIemuUlEG4wx09cBEaFUL29/an6+u6Mq0En8W7vC4rgjb+Ja+srmyvT8OmMM1unnC1WdqWk1MAwAOonxSr1FTau1naByA8AZEMbR2pvGx4HhXqTaOMQ307zXB5yY77eP2sFQkz/SAb6a6BYR2V2g1dFTMZmhgHYSI+q0cgCcLjBmi+MRiw8FCMaRssUxANMFJvmF/cvCGwrIj3q4yLO7jLFOF8ja6Se+W8DfuhAWR9EtYNzJPOob4pJXPMgJubUofYgBiLA4FmUROSGfLUj/HdCziYwxENGDUr3ccZ30eqVxiC86gE5ijDCO/KhE0b2KnJCPV6bnN07X+Y+38FxVr4dxdD800Vwr0d6YJYJxJ7M7wTNbC9J/33sL/1y/AMK/tR+ONtjoAAAAAElFTkSuQmCC",
@@ -185,11 +210,11 @@ async function updateSettings(patch: Partial<AppSettings>): Promise<void> {
 
 function dashboardState() {
   return {
-    app: { name: "Logitech Battery API", version: app.getVersion() },
+    app: { name: APP_NAME, version: app.getVersion() },
     settings: appStore.settings,
     history: appStore.history,
     devices: getDisplayDevices(),
-    connection: { connected, lastConnectedAt, lastDisconnectedAt, lastError: lastConnectionError },
+    connection: { connected, reconnecting, lastConnectedAt, lastDisconnectedAt, lastError: lastConnectionError },
     update: updater.status(),
     diagnostics: {
       platform: process.platform,
@@ -221,15 +246,31 @@ function registerDashboardIpc(): void {
   ipcMain.removeHandler("dashboard:clear-history");
   ipcMain.removeHandler("dashboard:open-log");
   ipcMain.removeHandler("dashboard:copy-diagnostics");
+  ipcMain.removeHandler("dashboard:window-minimize");
+  ipcMain.removeHandler("dashboard:window-toggle-maximize");
+  ipcMain.removeHandler("dashboard:window-close");
   ipcMain.handle("dashboard:get-state", () => dashboardState());
   ipcMain.handle("dashboard:update-settings", async (_event, patch: Partial<AppSettings>) => updateSettings(patch));
   ipcMain.handle("dashboard:refresh", () => client.refresh());
-  ipcMain.handle("dashboard:reconnect", () => client.reconnect());
+  ipcMain.handle("dashboard:reconnect", async () => {
+    reconnecting = true;
+    connected = false;
+    await pushDashboardState();
+    client.reconnect();
+  });
   ipcMain.handle("dashboard:check-update", () => updater.check());
   ipcMain.handle("dashboard:restart-update", () => updater.restart());
   ipcMain.handle("dashboard:clear-history", async () => { await appStore.clearHistory(); await pushDashboardState(); });
   ipcMain.handle("dashboard:open-log", () => shell.showItemInFolder(logger.filePath));
   ipcMain.handle("dashboard:copy-diagnostics", () => clipboard.writeText(diagnosticsText()));
+  ipcMain.handle("dashboard:window-minimize", (event) => BrowserWindow.fromWebContents(event.sender)?.minimize());
+  ipcMain.handle("dashboard:window-toggle-maximize", (event) => {
+    const window = BrowserWindow.fromWebContents(event.sender);
+    if (!window) return;
+    if (window.isMaximized()) window.unmaximize();
+    else window.maximize();
+  });
+  ipcMain.handle("dashboard:window-close", (event) => BrowserWindow.fromWebContents(event.sender)?.hide());
 }
 
 async function openDashboard(): Promise<void> {
@@ -244,16 +285,22 @@ async function openDashboard(): Promise<void> {
   await mkdir(preloadDirectory, { recursive: true });
   await writeFile(preloadPath, DASHBOARD_PRELOAD, "utf8");
   dashboardWindow = new BrowserWindow({
-    width: 820,
-    height: 680,
-    minWidth: 620,
-    minHeight: 520,
+    width: 1120,
+    height: 760,
+    minWidth: 820,
+    minHeight: 600,
     show: false,
+    frame: false,
+    transparent: true,
     autoHideMenuBar: true,
-    backgroundColor: "#09090b",
-    title: "Logitech Battery API",
-    icon: makePngIcon("green"),
+    backgroundColor: "#00000000",
+    title: APP_NAME,
     webPreferences: { preload: preloadPath, contextIsolation: true, nodeIntegration: false, sandbox: false },
+  });
+  dashboardWindow.on("close", (event) => {
+    if (isQuitting) return;
+    event.preventDefault();
+    dashboardWindow?.hide();
   });
   dashboardWindow.on("closed", () => { dashboardWindow = undefined; });
   dashboardWindow.webContents.on("did-finish-load", () => { void pushDashboardState(); });
@@ -358,6 +405,7 @@ export function startApp(controller: UpdateController): void {
     void pushDashboardState();
   });
   void app.whenReady().then(async () => {
+    await registerWindowsNotificationIdentity();
     const userData = app.getPath("userData");
     store = new StateStore(userData);
     appStore = new AppStore(userData);
@@ -375,6 +423,7 @@ export function startApp(controller: UpdateController): void {
     client = new GHubClient();
     client.on("connected", () => {
       connected = true;
+      reconnecting = false;
       hasConnected = true;
       lastConnectedAt = Date.now();
       lastConnectionError = undefined;
@@ -385,6 +434,7 @@ export function startApp(controller: UpdateController): void {
     client.on("disconnected", () => {
       const shouldNotify = connected && hasConnected && appStore.settings.notifyDisconnect;
       connected = false;
+      reconnecting = true;
       lastDisconnectedAt = Date.now();
       for (const device of devices.values()) device.connected = false;
       logger.info("Disconnected from G HUB; reconnect scheduled");
@@ -415,6 +465,7 @@ export function startApp(controller: UpdateController): void {
 }
 
 app.on("before-quit", () => {
+  isQuitting = true;
   client?.stop();
   ipcMain.removeHandler("dashboard:get-state");
   ipcMain.removeHandler("dashboard:update-settings");
@@ -425,4 +476,7 @@ app.on("before-quit", () => {
   ipcMain.removeHandler("dashboard:clear-history");
   ipcMain.removeHandler("dashboard:open-log");
   ipcMain.removeHandler("dashboard:copy-diagnostics");
+  ipcMain.removeHandler("dashboard:window-minimize");
+  ipcMain.removeHandler("dashboard:window-toggle-maximize");
+  ipcMain.removeHandler("dashboard:window-close");
 });

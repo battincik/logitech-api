@@ -1,0 +1,57 @@
+name: Bug report
+description: Report a reproducible problem in Logitech Battery API
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: Thanks for taking the time to report a problem. Remove personal information from logs before attaching them.
+  - type: input
+    id: version
+    attributes:
+      label: Application version
+      placeholder: 1.2.0
+    validations:
+      required: true
+  - type: dropdown
+    id: windows
+    attributes:
+      label: Windows version
+      options:
+        - Windows 11
+        - Windows 10
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: ghub
+    attributes:
+      label: Logitech G HUB version
+  - type: textarea
+    id: problem
+    attributes:
+      label: What happened?
+      description: Describe the actual and expected behavior.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Reproduction steps
+      placeholder: "1. Open the dashboard\n2. Select Analytics\n3. ..."
+    validations:
+      required: true
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Diagnostics and screenshots
+      description: Paste sanitized diagnostics or attach screenshots. Do not include private paths or personal information.
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checklist
+      options:
+        - label: I searched existing issues for the same problem.
+          required: true
+        - label: I removed personal information from logs and screenshots.
+          required: true
