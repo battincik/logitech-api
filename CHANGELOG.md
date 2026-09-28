@@ -17,6 +17,10 @@ All notable user-facing changes are documented here.
 
 ### Changed
 
+- Renamed the application display name to Logitech Developer Tool
+- Added reconnect placeholders and tray-on-close window behavior
+- Added subtle window transparency and animated online/offline indicators
+- Expanded battery charts with time labels, averages, current level, hourly change, and richer tooltips
 - Expanded Turkish and English dashboard copy
 - Improved README installation, build, update, and project structure documentation
 - Increased the default dashboard size for the new analytics layout

@@ -2,7 +2,7 @@
   "name": "logitech-battery-api",
   "version": "1.2.0",
   "author": "Battincik",
-  "description": "A lightweight Windows tray app for Logitech G HUB battery monitoring, history, notifications, diagnostics, and commit-based updates.",
+  "description": "Logitech Developer Tool is a lightweight Windows tray app for G HUB battery monitoring, history, notifications, diagnostics, and commit-based updates.",
   "main": "dist/bootstrap.js",
   "type": "commonjs",
   "scripts": {
@@ -34,7 +34,7 @@
   },
   "build": {
     "appId": "com.battincik.logitechbatteryapi",
-    "productName": "Logitech Battery API",
+    "productName": "Logitech Developer Tool",
     "directories": {
       "output": "release"
     },
@@ -64,15 +64,15 @@
       ]
     },
     "nsis": {
-      "artifactName": "Logitech-Battery-API-Setup-${version}-${arch}.${ext}",
+      "artifactName": "Logitech-Developer-Tool-Setup-${version}-${arch}.${ext}",
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "Logitech Battery API"
+      "shortcutName": "Logitech Developer Tool"
     },
     "portable": {
-      "artifactName": "Logitech-Battery-API-Portable-${version}-${arch}.${ext}"
+      "artifactName": "Logitech-Developer-Tool-Portable-${version}-${arch}.${ext}"
     }
   }
 }

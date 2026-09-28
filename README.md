@@ -1,4 +1,4 @@
-# Logitech Battery API
+# Logitech Developer Tool
 
 A lightweight Windows tray application that reads battery information from the local Logitech G HUB service. It keeps battery status visible, records local history, shows charging activity, and warns you before a device runs out of power.
 
