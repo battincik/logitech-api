@@ -289,6 +289,8 @@ async function openDashboard(): Promise<void> {
     height: 760,
     minWidth: 820,
     minHeight: 600,
+    resizable: true,
+    thickFrame: true,
     show: false,
     frame: false,
     transparent: true,
