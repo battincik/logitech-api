@@ -20,6 +20,8 @@ The dashboard uses a compact Liquid Glass interface with a custom Windows title 
 - Interactive 24-hour and 7-day battery charts with point inspection
 - Charging duration, sessions, and timeline for the last 24 hours
 - Color-coded tray, battery bars, and connection indicators
+- Compact headset icon and battery percentage on the Windows 11 taskbar
+- Adjustable position and device selection, click to open dashboard, and unknown state for stale readings
 - Charging, full battery, low battery, empty battery, and disconnect notifications
 - Seven-day local history with automatic sampling and retention
 - G HUB connection status, automatic reconnect, and manual reconnect
@@ -41,12 +43,14 @@ It only connects to:
 
 1. Open [Releases](https://github.com/battincik/logitech-api/releases/latest).
 2. Download one of the Windows x64 builds:
-   - `Logitech-Battery-API-Setup-<version>-x64.exe` for a normal installation, Start menu entry, and optional desktop shortcut.
-   - `Logitech-Battery-API-Portable-<version>-x64.exe` to run without installation.
+   - `Logitech-Developer-Tool-Setup-<version>-x64.exe` for a normal installation, Start menu entry, and optional desktop shortcut.
+   - `Logitech-Developer-Tool-Portable-<version>-x64.exe` to run without installation.
 3. Run the selected executable.
 4. Keep Logitech G HUB running in the background.
 
 The application starts in the notification area. Left-click the tray icon to open the dashboard or right-click it for the native menu.
+
+On Windows 11, the compact battery indicator appears on the primary display's bottom taskbar. Adjust its distance from the right edge and select a device in **Settings**, or turn it off there or from the tray menu. Automatic selection favors a headset, then the lowest battery. It uses a small transparent overlay because Windows does not expose an API for placing a wide custom text item in the notification area. Automatic taskbar hiding, top/side taskbars, and some fullscreen applications may affect its placement; the ordinary tray icon remains available.
 
 The executable is currently unsigned, so Windows SmartScreen may show a warning on first launch. Confirm that the file came from this repository and compare the SHA-256 digest shown on the release page.
 
@@ -98,8 +102,8 @@ npm run dist
 Output:
 
 ```text
-release/Logitech-Battery-API-Setup-<version>-x64.exe
-release/Logitech-Battery-API-Portable-<version>-x64.exe
+release/Logitech-Developer-Tool-Setup-<version>-x64.exe
+release/Logitech-Developer-Tool-Portable-<version>-x64.exe
 ```
 
 Build only one target when iterating on packaging:
@@ -132,6 +136,7 @@ Changes to Electron, native dependencies, packaging metadata, the executable nam
 - `src/battery-events.ts` — battery and charging notification rules
 - `src/updater.ts` — commit-based updater and bundle validation
 - `src/state-store.ts` — notification threshold state
+- `src/taskbar-widget.ts` — Windows taskbar indicator and display positioning
 - `updates/app.cjs` — generated in-app update bundle
 - `docs/` — dashboard screenshots and documentation assets
 

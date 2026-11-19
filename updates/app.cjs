@@ -3706,9 +3706,9 @@ __export(main_exports, {
   startApp: () => startApp
 });
 module.exports = __toCommonJS(main_exports);
-var import_electron = require("electron");
-var import_promises4 = require("node:fs/promises");
-var import_node_path4 = __toESM(require("node:path"));
+var import_electron2 = require("electron");
+var import_promises5 = require("node:fs/promises");
+var import_node_path5 = __toESM(require("node:path"));
 
 // src/app-store.ts
 var import_promises = require("node:fs/promises");
@@ -3717,7 +3717,10 @@ var DEFAULT_SETTINGS = {
   launchAtStartup: false,
   language: "tr",
   notifyDisconnect: true,
-  historyEnabled: true
+  historyEnabled: true,
+  taskbarWidget: process.platform === "win32",
+  taskbarWidgetOffset: 240,
+  taskbarDeviceId: "auto"
 };
 var HISTORY_RETENTION_MS = 7 * 24 * 60 * 60 * 1e3;
 var HISTORY_SAMPLE_MS = 5 * 60 * 1e3;
@@ -3733,8 +3736,16 @@ var AppStore = class {
     try {
       const parsed = JSON.parse(await (0, import_promises.readFile)(this.filePath, "utf8"));
       const language = parsed.settings?.language === "en" ? "en" : "tr";
+      const offset = Number(parsed.settings?.taskbarWidgetOffset);
       this.data = {
-        settings: { ...DEFAULT_SETTINGS, ...parsed.settings, language },
+        settings: {
+          ...DEFAULT_SETTINGS,
+          ...parsed.settings,
+          language,
+          taskbarWidget: typeof parsed.settings?.taskbarWidget === "boolean" ? parsed.settings.taskbarWidget : DEFAULT_SETTINGS.taskbarWidget,
+          taskbarWidgetOffset: Number.isFinite(offset) ? Math.max(100, Math.min(600, Math.round(offset))) : DEFAULT_SETTINGS.taskbarWidgetOffset,
+          taskbarDeviceId: typeof parsed.settings?.taskbarDeviceId === "string" ? parsed.settings.taskbarDeviceId.slice(0, 200) : "auto"
+        },
         history: parsed.history && typeof parsed.history === "object" ? parsed.history : {}
       };
       this.pruneHistory();
@@ -3751,6 +3762,9 @@ var AppStore = class {
   async updateSettings(patch) {
     const next = { ...this.data.settings, ...patch };
     next.language = next.language === "en" ? "en" : "tr";
+    next.taskbarWidget = typeof next.taskbarWidget === "boolean" ? next.taskbarWidget : DEFAULT_SETTINGS.taskbarWidget;
+    next.taskbarWidgetOffset = Number.isFinite(Number(next.taskbarWidgetOffset)) ? Math.max(100, Math.min(600, Math.round(Number(next.taskbarWidgetOffset)))) : DEFAULT_SETTINGS.taskbarWidgetOffset;
+    next.taskbarDeviceId = typeof next.taskbarDeviceId === "string" ? next.taskbarDeviceId.slice(0, 200) : "auto";
     this.data.settings = next;
     await this.persist();
     return this.settings;
@@ -3885,22 +3899,22 @@ function createDashboardHtml() {
 .workspace{min-height:0;display:grid;grid-template-columns:210px 1fr}.sidebar{padding:16px 12px 14px;border-right:1px solid var(--soft);background:#080a108a;backdrop-filter:blur(26px);display:flex;flex-direction:column}.nav-label{margin:7px 10px 8px;color:#586174;font-size:10px;text-transform:uppercase;letter-spacing:.13em;font-weight:700}.nav{display:grid;gap:5px}.nav button{border:1px solid transparent;background:transparent;border-radius:12px;padding:10px 11px;display:flex;align-items:center;gap:11px;text-align:left;color:var(--muted);cursor:pointer;transition:.18s}.nav button:hover{color:#e9edf7;background:#ffffff0b}.nav button.active{color:white;border-color:#6cb1ff33;background:linear-gradient(120deg,#2b7dff36,#3e8fff12);box-shadow:inset 0 1px #ffffff0f}.nav svg{width:17px;height:17px}.sidebar-foot{margin-top:auto;padding:12px;border:1px solid var(--soft);border-radius:14px;background:#ffffff07}.sidebar-foot strong{display:block}.sidebar-foot small{color:#626b7b}.content{min-width:0;overflow:auto;scrollbar-color:#334052 transparent;scrollbar-width:thin}main{max-width:1280px;margin:auto;padding:26px 28px 42px}.page{display:none;animation:enter .22s ease}.page.active{display:block}@keyframes enter{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:none}}
 .page-head{display:flex;align-items:flex-start;justify-content:space-between;gap:20px;margin-bottom:21px}.eyebrow{color:var(--blue);font-size:10px;text-transform:uppercase;letter-spacing:.16em;font-weight:750;margin-bottom:6px}h1,h2,p{margin:0}h1{font-size:25px;line-height:1.2;letter-spacing:-.035em;font-weight:680}h2{font-size:15px;letter-spacing:-.015em}.subtitle{color:var(--muted);margin-top:6px;max-width:650px}.actions{display:flex;align-items:center;flex-wrap:wrap;gap:8px}.button{border:1px solid var(--line);background:#ffffff0e;color:#dde3ef;padding:8px 12px;border-radius:10px;cursor:pointer;transition:.16s;box-shadow:inset 0 1px #ffffff0a}.button:hover{background:#ffffff18;transform:translateY(-1px)}.button.primary{color:white;border-color:#56a4ff80;background:linear-gradient(135deg,#258cff,#1265d8);box-shadow:0 8px 24px #186ee73d,inset 0 1px #ffffff42}.button.danger{color:#ff9da6;border-color:#ff5d6c38;background:#ff5d6c12}.button:disabled{opacity:.5;cursor:default;transform:none}
 .glass{position:relative;border:1px solid var(--line);background:linear-gradient(145deg,#1c212dbc,#0e11199e);backdrop-filter:blur(28px) saturate(155%);box-shadow:inset 0 1px #ffffff12,0 24px 80px #0000006b;border-radius:var(--radius);overflow:hidden}.glass:before{content:"";position:absolute;inset:0;pointer-events:none;background:linear-gradient(125deg,#ffffff0b,transparent 34%,transparent 72%,#569fff09)}.stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:11px;margin-bottom:16px}.stat{padding:15px 16px;min-height:90px}.stat-top{display:flex;align-items:center;justify-content:space-between;color:var(--muted)}.stat-icon{width:28px;height:28px;border:1px solid var(--line);border-radius:9px;display:grid;place-items:center;background:#ffffff0a;color:var(--blue)}.stat-icon svg{width:14px}.stat-value{margin-top:9px;font-size:22px;font-weight:700;letter-spacing:-.03em}.section-row{margin:19px 1px 10px}.section-row p{color:var(--muted);font-size:11px;margin-top:2px}.device-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(265px,1fr));gap:12px}.device-card{padding:18px;min-height:170px}.device-top{display:flex;align-items:flex-start;justify-content:space-between;gap:14px}.device-ident{display:flex;align-items:center;gap:12px;min-width:0}.device-icon{width:42px;height:42px;border:1px solid var(--line);border-radius:14px;display:grid;place-items:center;background:linear-gradient(145deg,#ffffff1c,#ffffff07)}.device-icon svg{width:22px}.device-name{font-size:14px;font-weight:650;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.device-model{color:var(--muted);font-size:11px;margin-top:2px}.battery-number{font-size:25px;font-weight:720;letter-spacing:-.04em}.battery-track{height:7px;background:#ffffff10;border-radius:99px;overflow:hidden;margin:19px 0 10px;box-shadow:inset 0 1px 2px #0006}.battery-fill{height:100%;border-radius:inherit;box-shadow:0 0 18px currentColor;transition:width .4s}.device-foot{display:flex;justify-content:space-between;gap:10px;color:var(--muted);font-size:11px}.inline-status{display:flex;align-items:center;gap:7px;font-weight:550}.inline-status.online{color:var(--green)}.inline-status.offline{color:var(--red)}.inline-status.charging{color:#5aa7ff}.mini-dot{width:7px;height:7px;border-radius:50%;background:currentColor}.inline-status.online .mini-dot{animation:pulse 1.8s ease-out infinite}.empty{min-height:150px;display:grid;place-items:center;text-align:center;color:var(--muted);padding:32px}.empty strong{color:#e5e9f1;display:block;margin-bottom:4px}.reconnect-placeholder{grid-column:1/-1;display:flex;align-items:center;gap:13px;padding:15px 17px;color:#c7ceda}.spinner{width:18px;height:18px;border:2px solid #5ba5ff38;border-top-color:#5ba5ff;border-radius:50%;animation:spin .8s linear infinite}.reconnect-placeholder strong{display:block}.reconnect-placeholder small{display:block;color:var(--muted);margin-top:2px}.loading-card{min-height:170px;padding:18px}.skeleton{position:relative;overflow:hidden;background:#ffffff0c;border-radius:8px}.skeleton:after{content:"";position:absolute;inset:0;transform:translateX(-100%);background:linear-gradient(90deg,transparent,#ffffff12,transparent);animation:shimmer 1.35s infinite}.sk-head{width:72%;height:14px;margin:7px 0 12px}.sk-sub{width:38%;height:9px}.sk-track{height:7px;margin-top:35px}.sk-foot{width:52%;height:9px;margin-top:17px}@keyframes spin{to{transform:rotate(360deg)}}@keyframes shimmer{100%{transform:translateX(100%)}}
-.analytics-grid{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(280px,.75fr);gap:13px;align-items:start}.panel,.update-card,.diagnostic-card,.settings-card{padding:19px}.panel-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:15px}.segmented{display:flex;gap:3px;padding:3px;border:1px solid var(--soft);border-radius:10px;background:#0003}.segmented button{border:0;border-radius:7px;background:transparent;color:var(--muted);padding:5px 9px;cursor:pointer;font-size:11px}.segmented button.active{color:white;background:#ffffff18}.series-tabs{display:flex;gap:7px;overflow:auto;margin-bottom:13px}.series-tab{border:1px solid var(--soft);background:#ffffff06;border-radius:99px;color:var(--muted);padding:6px 10px;white-space:nowrap;cursor:pointer}.series-tab.active{color:white;border-color:#4b9aff6b;background:#2c84ff24}.chart-wrap{position:relative;height:310px;border:1px solid var(--soft);border-radius:15px;background:linear-gradient(180deg,#4076c212,#0002);overflow:hidden}.chart-wrap svg{width:100%;height:100%;display:block}.chart-grid{stroke:#ffffff12;stroke-width:1;vector-effect:non-scaling-stroke}.chart-grid.vertical{stroke:#ffffff0a;stroke-dasharray:2 3}.chart-scale{position:absolute;z-index:2;left:9px;top:17px;bottom:31px;display:flex;flex-direction:column;justify-content:space-between;color:#697386;font-size:10px;pointer-events:none}.chart-time-scale{position:absolute;z-index:2;left:7%;right:2%;bottom:8px;display:flex;justify-content:space-between;color:#697386;font-size:9px;pointer-events:none}.chart-line{fill:none;stroke:url(#lineGradient);stroke-width:2.4;vector-effect:non-scaling-stroke;filter:drop-shadow(0 0 5px #4397ff80)}.chart-area{fill:url(#areaGradient)}.chart-cursor{stroke:#ffffff47;stroke-width:1;stroke-dasharray:3 4;vector-effect:non-scaling-stroke;opacity:0}.chart-point{fill:white;stroke:#3c98ff;stroke-width:2;vector-effect:non-scaling-stroke;opacity:0}.tooltip{position:absolute;z-index:20;pointer-events:none;opacity:0;min-width:145px;padding:10px 11px;border:1px solid #6aaeff55;border-radius:11px;background:#080b12f5;backdrop-filter:blur(22px);box-shadow:0 14px 40px #000a,0 0 0 1px #ffffff08;font-size:11px;transform:translate(-50%,-112%)}.tooltip strong{display:block;font-size:15px}.tooltip span{display:block;color:var(--muted);margin-top:2px}.tooltip em{display:block;color:#99a7bb;font-style:normal;margin-top:4px}.chart-legend{display:flex;align-items:center;gap:14px;margin:10px 1px 0;color:var(--muted);font-size:10px}.legend-dot{width:7px;height:7px;border-radius:50%;background:#4ba0ff;box-shadow:0 0 8px #4ba0ffaa}.chart-summary{display:grid;grid-template-columns:repeat(3,1fr);gap:9px;margin-top:12px}.metric{padding:10px 11px;border:1px solid var(--soft);border-radius:12px;background:#ffffff06}.metric span{color:var(--muted);font-size:10px}.metric strong{display:block;margin-top:3px;font-size:14px}.badge{padding:4px 8px;border:1px solid var(--line);border-radius:99px;background:#ffffff0a;color:#c7ceda;font-size:10px}
+.analytics-grid{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(280px,.75fr);gap:13px;align-items:start}.panel,.update-card,.diagnostic-card,.settings-card{padding:19px}.panel-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:15px}.segmented{display:flex;gap:3px;padding:3px;border:1px solid var(--soft);border-radius:10px;background:#0003}.segmented button{border:0;border-radius:7px;background:transparent;color:var(--muted);padding:5px 9px;cursor:pointer;font-size:11px}.segmented button.active{color:white;background:#ffffff18}.series-tabs{display:flex;gap:7px;overflow:auto;margin-bottom:13px}.series-tab{border:1px solid var(--soft);background:#ffffff06;border-radius:99px;color:var(--muted);padding:6px 10px;white-space:nowrap;cursor:pointer}.series-tab.active{color:white;border-color:#4b9aff6b;background:#2c84ff24}.chart-wrap{position:relative;height:310px;border:1px solid var(--soft);border-radius:15px;background:linear-gradient(180deg,#4076c212,#0002);overflow:hidden}.chart-wrap svg{width:100%;height:100%;display:block}.chart-grid{stroke:#ffffff12;stroke-width:1;vector-effect:non-scaling-stroke}.chart-grid.vertical{stroke:#ffffff0a;stroke-dasharray:2 3}.chart-scale{position:absolute;z-index:2;left:9px;top:17px;bottom:31px;display:flex;flex-direction:column;justify-content:space-between;color:#697386;font-size:10px;pointer-events:none}.chart-time-scale{position:absolute;z-index:2;left:7%;right:2%;bottom:8px;display:flex;justify-content:space-between;color:#697386;font-size:9px;pointer-events:none}.chart-line{fill:none;stroke:url(#lineGradient);stroke-width:2.4;vector-effect:non-scaling-stroke;filter:drop-shadow(0 0 5px #4397ff80)}.charge-band{fill:#37d68a;opacity:.12}.charge-band-line{stroke:#37d68a;stroke-width:.45;opacity:.62;vector-effect:non-scaling-stroke}.usage-band{fill:#4ba0ff;opacity:.045}.chart-area{fill:url(#areaGradient)}.chart-cursor{stroke:#ffffff47;stroke-width:1;stroke-dasharray:3 4;vector-effect:non-scaling-stroke;opacity:0}.chart-point{fill:white;stroke:#3c98ff;stroke-width:2;vector-effect:non-scaling-stroke;opacity:0}.tooltip{position:absolute;z-index:20;pointer-events:none;opacity:0;min-width:145px;padding:10px 11px;border:1px solid #6aaeff55;border-radius:11px;background:#080b12f5;backdrop-filter:blur(22px);box-shadow:0 14px 40px #000a,0 0 0 1px #ffffff08;font-size:11px;transform:translate(-50%,-112%)}.tooltip strong{display:block;font-size:15px}.tooltip span{display:block;color:var(--muted);margin-top:2px}.tooltip em{display:block;color:#99a7bb;font-style:normal;margin-top:4px}.chart-legend{display:flex;align-items:center;gap:14px;margin:10px 1px 0;color:var(--muted);font-size:10px;flex-wrap:wrap}.legend-dot{width:7px;height:7px;border-radius:50%;background:#4ba0ff;box-shadow:0 0 8px #4ba0ffaa}.legend-dot.charge{background:#37d68a;box-shadow:0 0 8px #37d68aaa}.chart-summary{display:grid;grid-template-columns:repeat(3,1fr);gap:9px;margin-top:12px}.insight-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-top:13px}.insight-card{padding:13px 14px}.insight-card span{color:var(--muted);font-size:10px}.insight-card strong{display:block;margin-top:5px;font-size:17px;letter-spacing:-.02em}.insight-card small{display:block;color:#6f7a8e;margin-top:3px}.metric{padding:10px 11px;border:1px solid var(--soft);border-radius:12px;background:#ffffff06}.metric span{color:var(--muted);font-size:10px}.metric strong{display:block;margin-top:3px;font-size:14px}.badge{padding:4px 8px;border:1px solid var(--line);border-radius:99px;background:#ffffff0a;color:#c7ceda;font-size:10px}
 .charge-total{font-size:29px;font-weight:720;letter-spacing:-.04em;margin-top:4px}.charge-total small{display:block;color:var(--muted);font-size:11px;font-weight:500;letter-spacing:0;margin-top:2px}.timeline{position:relative;height:88px;margin:18px 0 8px;border-radius:13px;border:1px solid var(--soft);background:repeating-linear-gradient(90deg,transparent 0,transparent calc(25% - 1px),#ffffff0e 25%);overflow:hidden}.timeline:after{content:"";position:absolute;left:0;right:0;top:50%;height:1px;background:#ffffff0f}.charge-segment{position:absolute;top:21px;height:44px;min-width:2px;border-radius:5px;background:linear-gradient(180deg,#49e49a,#23bd70);box-shadow:0 0 15px #30da8547}.timeline-labels{display:flex;justify-content:space-between;color:#626b7b;font-size:9px}.facts{display:grid;gap:8px;margin-top:17px}.fact,.data-row{display:flex;justify-content:space-between;gap:14px;padding:10px 0;border-bottom:1px solid var(--soft)}.fact:last-child,.data-row:last-child{border-bottom:0}.fact span,.data-row span:first-child{color:var(--muted)}.stack{display:grid;gap:3px}pre{margin:0;white-space:pre-wrap;overflow-wrap:anywhere;color:#cbd2df;font:11px/1.65 "Cascadia Code",Consolas,monospace}.setting{padding:13px 0;border-bottom:1px solid var(--soft)}.setting:last-child{border-bottom:0}.setting-copy strong{display:block;font-size:12px}.setting-copy small{color:var(--muted)}input[type=checkbox]{appearance:none;width:36px;height:20px;border-radius:99px;background:#343946;border:1px solid var(--line);position:relative;cursor:pointer;transition:.18s}input[type=checkbox]:after{content:"";position:absolute;width:14px;height:14px;left:2px;top:2px;border-radius:50%;background:#c6ccd7;transition:.18s}input[type=checkbox]:checked{background:#2188ff}input[type=checkbox]:checked:after{left:18px;background:white}select{color:var(--text);background:#202530;border:1px solid var(--line);padding:7px 9px;border-radius:9px}
-@media(max-width:980px){.workspace{grid-template-columns:72px 1fr}.sidebar{padding-inline:9px}.nav-label,.nav span,.sidebar-foot small{display:none}.nav button{justify-content:center}.sidebar-foot{text-align:center;padding:9px}.stats{grid-template-columns:repeat(2,1fr)}.analytics-grid{grid-template-columns:1fr}}@media(max-width:720px){main{padding:20px 16px}.page-head{display:block}.page-head>.actions{margin-top:13px}.chart-summary{grid-template-columns:1fr}.title-state{display:none}}
+@media(max-width:980px){.workspace{grid-template-columns:72px 1fr}.sidebar{padding-inline:9px}.nav-label,.nav span,.sidebar-foot small{display:none}.nav button{justify-content:center}.sidebar-foot{text-align:center;padding:9px}.stats{grid-template-columns:repeat(2,1fr)}.analytics-grid{grid-template-columns:1fr}.insight-grid{grid-template-columns:repeat(2,1fr)}}@media(max-width:720px){main{padding:20px 16px}.page-head{display:block}.page-head>.actions{margin-top:13px}.chart-summary,.insight-grid{grid-template-columns:1fr}.title-state{display:none}}
 </style></head><body>
 <div class="backdrop"><i class="orb a"></i><i class="orb b"></i></div><div class="app">
 <header class="titlebar"><div class="brand"><i class="logo"><svg viewBox="0 0 24 24" fill="none"><path d="M7 7.5a5 5 0 0 1 10 0V14a5 5 0 0 1-10 0V7.5Z" stroke="white" stroke-width="1.7"/><path d="M12 3v7.5M7 11h10" stroke="white" stroke-width="1.5" opacity=".75"/></svg></i><span>Logitech Developer Tool</span></div><div class="title-state"><i id="title-dot" class="dot"></i><span id="title-state"></span></div><div class="window-actions"><button class="window-button" data-window="minimize" aria-label="K\xFC\xE7\xFClt"><svg viewBox="0 0 12 12"><path d="M2 6.5h8" stroke="currentColor"/></svg></button><button class="window-button" data-window="maximize" aria-label="B\xFCy\xFCt"><svg viewBox="0 0 12 12"><rect x="2.2" y="2.2" width="7.6" height="7.6" fill="none" stroke="currentColor"/></svg></button><button class="window-button close" data-window="close" aria-label="Tepsiye k\xFC\xE7\xFClt"><svg viewBox="0 0 12 12"><path d="m2.2 2.2 7.6 7.6m0-7.6-7.6 7.6" stroke="currentColor"/></svg></button></div></header>
 <div class="workspace"><aside class="sidebar"><div class="nav-label">Workspace</div><nav id="nav" class="nav"></nav><div class="sidebar-foot"><strong id="version"></strong><small id="side-state"></small></div></aside><div class="content"><main>
 <section id="overview" class="page active"><div class="page-head"><div><div class="eyebrow" data-t="liveOverview"></div><h1 data-t="dashboardTitle"></h1><p class="subtitle" data-t="dashboardSubtitle"></p></div><div class="actions"><button class="button" data-action="reconnect"></button><button class="button primary" data-action="refresh"></button></div></div><div id="stats" class="stats"></div><div class="section-row"><h2 data-t="devicesTitle"></h2><p data-t="devicesSubtitle"></p></div><div id="devices" class="device-grid"></div></section>
-<section id="history" class="page"><div class="page-head"><div><div class="eyebrow" data-t="analytics"></div><h1 data-t="analyticsTitle"></h1><p class="subtitle" data-t="analyticsSubtitle"></p></div><div id="ranges" class="segmented"><button data-range="24" class="active">24h</button><button data-range="168">7d</button></div></div><div id="series-tabs" class="series-tabs"></div><div class="analytics-grid"><div id="chart" class="glass panel"></div><div id="charge" class="glass panel"></div></div><div class="actions" style="margin-top:13px"><button class="button danger" data-action="clear-history"></button></div></section>
+<section id="history" class="page"><div class="page-head"><div><div class="eyebrow" data-t="analytics"></div><h1 data-t="analyticsTitle"></h1><p class="subtitle" data-t="analyticsSubtitle"></p></div><div id="ranges" class="segmented"><button data-range="24" class="active">24h</button><button data-range="168">7d</button></div></div><div id="series-tabs" class="series-tabs"></div><div class="analytics-grid"><div id="chart" class="glass panel"></div><div id="charge" class="glass panel"></div></div><div id="insights" class="insight-grid"></div><div class="actions" style="margin-top:13px"><button class="button danger" data-action="clear-history"></button></div></section>
 <section id="updates" class="page"><div class="page-head"><div><div class="eyebrow" data-t="maintenance"></div><h1 data-t="updatesTitle"></h1><p class="subtitle" data-t="updatesSubtitle"></p></div></div><div id="update" class="glass update-card"></div></section>
 <section id="diagnostics" class="page"><div class="page-head"><div><div class="eyebrow" data-t="support"></div><h1 data-t="diagnosticsTitle"></h1><p class="subtitle" data-t="diagnosticsSubtitle"></p></div><div class="actions"><button class="button" data-action="copy-diagnostics"></button><button class="button" data-action="open-log"></button></div></div><div class="glass diagnostic-card"><pre id="diagnostics-text"></pre></div></section>
 <section id="settings" class="page"><div class="page-head"><div><div class="eyebrow" data-t="preferences"></div><h1 data-t="settingsTitle"></h1><p class="subtitle" data-t="settingsSubtitle"></p></div></div><div class="glass settings-card" id="settings-list"></div></section>
 </main></div></div></div>
 <script>
 const api=window.logitechApi;
-const words={tr:{overview:'Genel Bak\u0131\u015F',history:'Analiz',updates:'G\xFCncellemeler',diagnostics:'Tan\u0131lama',settings:'Ayarlar',liveOverview:'Canl\u0131 g\xF6r\xFCn\xFCm',dashboardTitle:'Cihazlar\u0131na genel bak\u0131\u015F',dashboardSubtitle:'Logitech cihazlar\u0131n\u0131n pil durumunu, ba\u011Flant\u0131s\u0131n\u0131 ve son etkinli\u011Fini tek ekrandan izle.',devicesTitle:'Ba\u011Fl\u0131 cihazlar',devicesSubtitle:'G HUB taraf\u0131ndan bildirilen pil destekli donan\u0131mlar',analytics:'Pil analizi',analyticsTitle:'Pil ge\xE7mi\u015Fi ve \u015Farj etkinli\u011Fi',analyticsSubtitle:'T\xFCketim e\u011Frisini incele, \u015Farj s\xFCrelerini ve kullan\u0131m e\u011Filimini kar\u015F\u0131la\u015Ft\u0131r.',maintenance:'Bak\u0131m',updatesTitle:'Uygulama g\xFCncellemeleri',updatesSubtitle:'Commit tabanl\u0131 g\xFCncelleme durumunu ve son de\u011Fi\u015Fikli\u011Fi g\xF6r\xFCnt\xFCle.',support:'Destek',diagnosticsTitle:'Tan\u0131lama bilgileri',diagnosticsSubtitle:'Ba\u011Flant\u0131 ve \xE7al\u0131\u015Fma ortam\u0131n\u0131 sorun giderme i\xE7in incele.',preferences:'Tercihler',settingsTitle:'Uygulama ayarlar\u0131',settingsSubtitle:'Ba\u015Flang\u0131\xE7, bildirim, ge\xE7mi\u015F ve dil tercihlerini y\xF6net.',connected:'G HUB ba\u011Fl\u0131',disconnected:'G HUB bekleniyor',reconnecting:'G HUB\u2019a yeniden ba\u011Flan\u0131l\u0131yor',reconnectingHelp:'Cihazlar ve pil verileri k\u0131sa s\xFCre i\xE7inde yeniden e\u015Fitlenecek.',refresh:'\u015Eimdi yenile',reconnect:'Yeniden ba\u011Flan',noDevices:'Pil destekli cihaz bulunamad\u0131',noDevicesHelp:'G HUB a\xE7\u0131kken cihaz\u0131n\u0131 yeniden ba\u011Flamay\u0131 dene.',charging:'\u015Earj oluyor',online:'\xC7evrimi\xE7i',offline:'\xC7evrimd\u0131\u015F\u0131',clearHistory:'Ge\xE7mi\u015Fi temizle',noHistory:'Hen\xFCz pil ge\xE7mi\u015Fi yok',noHistoryHelp:'Veriler geldik\xE7e geli\u015Fmi\u015F grafik burada olu\u015Facak.',checkUpdate:'G\xFCncellemeleri denetle',restart:'Uygula ve yeniden ba\u015Flat',updateState:'Durum',commit:'Commit',message:'De\u011Fi\u015Fiklik',checkedAt:'Son kontrol',copyDiagnostics:'Tan\u0131lamay\u0131 kopyala',openLog:'Log dosyas\u0131n\u0131 a\xE7',launchAtStartup:'Windows ile otomatik ba\u015Flat',launchAtStartupHelp:'Oturum a\xE7\u0131ld\u0131\u011F\u0131nda bildirim alan\u0131nda \xE7al\u0131\u015Ft\u0131r.',notifyDisconnect:'Ba\u011Flant\u0131 kesilince bildir',notifyDisconnectHelp:'G HUB veya cihaz ba\u011Flant\u0131s\u0131 koptu\u011Funda bildir.',historyEnabled:'Pil ge\xE7mi\u015Fini kaydet',historyEnabledHelp:'Yedi g\xFCnl\xFCk pil ve \u015Farj etkinli\u011Fini yerel olarak sakla.',language:'Dil',languageHelp:'Kontrol panelinin dilini se\xE7.',turkish:'T\xFCrk\xE7e',english:'English',idle:'G\xFCncel',checking:'Denetleniyor',ready:'Yeniden ba\u015Flatmaya haz\u0131r',error:'Hata',copied:'Kopyaland\u0131',deviceCount:'Aktif cihaz',averageBattery:'Ortalama pil',chargingNow:'\u015Earjda',lastSync:'Son e\u015Fitleme',minLevel:'En d\xFC\u015F\xFCk',maxLevel:'En y\xFCksek',change:'De\u011Fi\u015Fim',averageLevel:'Ortalama',currentLevel:'Mevcut',hourlyRate:'Saatlik de\u011Fi\u015Fim',batteryLevel:'Pil seviyesi',sampleChange:'\xD6nceki \xF6l\xE7\xFCme g\xF6re',chargingActivity:'\u015Earj etkinli\u011Fi',last24Hours:'Son 24 saat',totalChargeTime:'Toplam \u015Farj s\xFCresi',sessions:'\u015Earj oturumu',currentState:'Mevcut durum',notCharging:'\u015Earj edilmiyor',hoursShort:'sa',minutesShort:'dk',dataPoints:'veri noktas\u0131',trendStable:'Dengeli',trendDown:'Azal\u0131yor',trendUp:'Y\xFCkseliyor'},en:{overview:'Overview',history:'Analytics',updates:'Updates',diagnostics:'Diagnostics',settings:'Settings',liveOverview:'Live overview',dashboardTitle:'Your devices at a glance',dashboardSubtitle:'Monitor battery, connection and recent activity for Logitech devices in one place.',devicesTitle:'Connected devices',devicesSubtitle:'Battery-powered hardware reported by G HUB',analytics:'Battery analytics',analyticsTitle:'Battery history and charging activity',analyticsSubtitle:'Explore the discharge curve, charging duration and recent usage trend.',maintenance:'Maintenance',updatesTitle:'Application updates',updatesSubtitle:'View commit-based update status and the latest change.',support:'Support',diagnosticsTitle:'Diagnostic information',diagnosticsSubtitle:'Use connection and environment details for troubleshooting.',preferences:'Preferences',settingsTitle:'Application settings',settingsSubtitle:'Manage startup, notification, history and language preferences.',connected:'G HUB connected',disconnected:'Waiting for G HUB',reconnecting:'Reconnecting to G HUB',reconnectingHelp:'Devices and battery data will be synchronized again shortly.',refresh:'Refresh now',reconnect:'Reconnect',noDevices:'No battery-powered devices found',noDevicesHelp:'Try reconnecting your device while G HUB is open.',charging:'Charging',online:'Online',offline:'Offline',clearHistory:'Clear history',noHistory:'No battery history yet',noHistoryHelp:'The advanced chart will appear as readings arrive.',checkUpdate:'Check for updates',restart:'Apply and restart',updateState:'Status',commit:'Commit',message:'Change',checkedAt:'Last checked',copyDiagnostics:'Copy diagnostics',openLog:'Open log file',launchAtStartup:'Start automatically with Windows',launchAtStartupHelp:'Run in the notification area when you sign in.',notifyDisconnect:'Notify when disconnected',notifyDisconnectHelp:'Notify when G HUB or a device disconnects.',historyEnabled:'Record battery history',historyEnabledHelp:'Keep seven days of battery and charging activity locally.',language:'Language',languageHelp:'Choose the dashboard language.',turkish:'T\xFCrk\xE7e',english:'English',idle:'Up to date',checking:'Checking',ready:'Ready to restart',error:'Error',copied:'Copied',deviceCount:'Active devices',averageBattery:'Average battery',chargingNow:'Charging',lastSync:'Last sync',minLevel:'Lowest',maxLevel:'Highest',change:'Change',averageLevel:'Average',currentLevel:'Current',hourlyRate:'Hourly change',batteryLevel:'Battery level',sampleChange:'Since previous reading',chargingActivity:'Charging activity',last24Hours:'Last 24 hours',totalChargeTime:'Total charge time',sessions:'Charging sessions',currentState:'Current state',notCharging:'Not charging',hoursShort:'h',minutesShort:'m',dataPoints:'data points',trendStable:'Stable',trendDown:'Falling',trendUp:'Rising'}};
+const words={tr:{overview:'Genel Bak\u0131\u015F',history:'Analiz',updates:'G\xFCncellemeler',diagnostics:'Tan\u0131lama',settings:'Ayarlar',liveOverview:'Canl\u0131 g\xF6r\xFCn\xFCm',dashboardTitle:'Cihazlar\u0131na genel bak\u0131\u015F',dashboardSubtitle:'Logitech cihazlar\u0131n\u0131n pil durumunu, ba\u011Flant\u0131s\u0131n\u0131 ve son etkinli\u011Fini tek ekrandan izle.',devicesTitle:'Ba\u011Fl\u0131 cihazlar',devicesSubtitle:'G HUB taraf\u0131ndan bildirilen pil destekli donan\u0131mlar',analytics:'Pil analizi',analyticsTitle:'Pil ge\xE7mi\u015Fi ve \u015Farj etkinli\u011Fi',analyticsSubtitle:'T\xFCketim e\u011Frisini incele, \u015Farj s\xFCrelerini ve kullan\u0131m e\u011Filimini kar\u015F\u0131la\u015Ft\u0131r.',maintenance:'Bak\u0131m',updatesTitle:'Uygulama g\xFCncellemeleri',updatesSubtitle:'Commit tabanl\u0131 g\xFCncelleme durumunu ve son de\u011Fi\u015Fikli\u011Fi g\xF6r\xFCnt\xFCle.',support:'Destek',diagnosticsTitle:'Tan\u0131lama bilgileri',diagnosticsSubtitle:'Ba\u011Flant\u0131 ve \xE7al\u0131\u015Fma ortam\u0131n\u0131 sorun giderme i\xE7in incele.',preferences:'Tercihler',settingsTitle:'Uygulama ayarlar\u0131',settingsSubtitle:'Ba\u015Flang\u0131\xE7, bildirim, ge\xE7mi\u015F ve dil tercihlerini y\xF6net.',connected:'G HUB ba\u011Fl\u0131',disconnected:'G HUB bekleniyor',reconnecting:'G HUB\u2019a yeniden ba\u011Flan\u0131l\u0131yor',reconnectingHelp:'Cihazlar ve pil verileri k\u0131sa s\xFCre i\xE7inde yeniden e\u015Fitlenecek.',refresh:'\u015Eimdi yenile',reconnect:'Yeniden ba\u011Flan',noDevices:'Pil destekli cihaz bulunamad\u0131',noDevicesHelp:'G HUB a\xE7\u0131kken cihaz\u0131n\u0131 yeniden ba\u011Flamay\u0131 dene.',charging:'\u015Earj oluyor',online:'\xC7evrimi\xE7i',offline:'\xC7evrimd\u0131\u015F\u0131',clearHistory:'Ge\xE7mi\u015Fi temizle',noHistory:'Hen\xFCz pil ge\xE7mi\u015Fi yok',noHistoryHelp:'Veriler geldik\xE7e geli\u015Fmi\u015F grafik burada olu\u015Facak.',checkUpdate:'G\xFCncellemeleri denetle',restart:'Uygula ve yeniden ba\u015Flat',updateState:'Durum',commit:'Commit',message:'De\u011Fi\u015Fiklik',checkedAt:'Son kontrol',copyDiagnostics:'Tan\u0131lamay\u0131 kopyala',openLog:'Log dosyas\u0131n\u0131 a\xE7',launchAtStartup:'Windows ile otomatik ba\u015Flat',launchAtStartupHelp:'Oturum a\xE7\u0131ld\u0131\u011F\u0131nda bildirim alan\u0131nda \xE7al\u0131\u015Ft\u0131r.',taskbarWidget:'G\xF6rev \xE7ubu\u011Funda pil g\xF6stergesi',taskbarWidgetHelp:'Kulakl\u0131k simgesi ve pil y\xFCzdesini Windows 11 g\xF6rev \xE7ubu\u011Funda g\xF6ster.',taskbarWidgetOffset:'Sa\u011F kenardan uzakl\u0131k',taskbarWidgetOffsetHelp:'Saat ve sistem simgelerine g\xF6re g\xF6stergenin yerini ayarla.',taskbarDeviceId:'G\xF6sterilecek cihaz',taskbarDeviceIdHelp:'Otomatik se\xE7im kulakl\u0131\u011F\u0131, yoksa en d\xFC\u015F\xFCk pili g\xF6sterir.',automatic:'Otomatik',notifyDisconnect:'Ba\u011Flant\u0131 kesilince bildir',notifyDisconnectHelp:'G HUB veya cihaz ba\u011Flant\u0131s\u0131 koptu\u011Funda bildir.',historyEnabled:'Pil ge\xE7mi\u015Fini kaydet',historyEnabledHelp:'Yedi g\xFCnl\xFCk pil ve \u015Farj etkinli\u011Fini yerel olarak sakla.',language:'Dil',languageHelp:'Kontrol panelinin dilini se\xE7.',turkish:'T\xFCrk\xE7e',english:'English',idle:'G\xFCncel',checking:'Denetleniyor',ready:'Yeniden ba\u015Flatmaya haz\u0131r',error:'Hata',copied:'Kopyaland\u0131',deviceCount:'Aktif cihaz',averageBattery:'Ortalama pil',chargingNow:'\u015Earjda',lastSync:'Son e\u015Fitleme',minLevel:'En d\xFC\u015F\xFCk',maxLevel:'En y\xFCksek',change:'De\u011Fi\u015Fim',averageLevel:'Ortalama',currentLevel:'Mevcut',hourlyRate:'Saatlik de\u011Fi\u015Fim',batteryLevel:'Pil seviyesi',sampleChange:'\xD6nceki \xF6l\xE7\xFCme g\xF6re',chargingActivity:'\u015Earj etkinli\u011Fi',last24Hours:'Son 24 saat',totalChargeTime:'Toplam \u015Farj s\xFCresi',sessions:'\u015Earj oturumu',currentState:'Mevcut durum',notCharging:'\u015Earj edilmiyor',hoursShort:'sa',minutesShort:'dk',dataPoints:'veri noktas\u0131',trendStable:'Dengeli',trendDown:'Azal\u0131yor',trendUp:'Y\xFCkseliyor',batteryInsights:'Pil \xF6ng\xF6r\xFCleri',timeRemaining:'Tahmini kalan s\xFCre',timeToFull:'Doluma kalan s\xFCre',usageRate:'Kullan\u0131m h\u0131z\u0131',chargeRate:'\u015Earj h\u0131z\u0131',chargingTime:'\u015Earjda ge\xE7en s\xFCre',usageTime:'Kullan\u0131mda ge\xE7en s\xFCre',confidence:'G\xFCven',learning:'Veri birikiyor',needsMoreData:'Daha fazla \xF6l\xE7\xFCm gerekiyor',usageSegment:'Kullan\u0131m',chargeSegment:'\u015Earj'},en:{overview:'Overview',history:'Analytics',updates:'Updates',diagnostics:'Diagnostics',settings:'Settings',liveOverview:'Live overview',dashboardTitle:'Your devices at a glance',dashboardSubtitle:'Monitor battery, connection and recent activity for Logitech devices in one place.',devicesTitle:'Connected devices',devicesSubtitle:'Battery-powered hardware reported by G HUB',analytics:'Battery analytics',analyticsTitle:'Battery history and charging activity',analyticsSubtitle:'Explore the discharge curve, charging duration and recent usage trend.',maintenance:'Maintenance',updatesTitle:'Application updates',updatesSubtitle:'View commit-based update status and the latest change.',support:'Support',diagnosticsTitle:'Diagnostic information',diagnosticsSubtitle:'Use connection and environment details for troubleshooting.',preferences:'Preferences',settingsTitle:'Application settings',settingsSubtitle:'Manage startup, notification, history and language preferences.',connected:'G HUB connected',disconnected:'Waiting for G HUB',reconnecting:'Reconnecting to G HUB',reconnectingHelp:'Devices and battery data will be synchronized again shortly.',refresh:'Refresh now',reconnect:'Reconnect',noDevices:'No battery-powered devices found',noDevicesHelp:'Try reconnecting your device while G HUB is open.',charging:'Charging',online:'Online',offline:'Offline',clearHistory:'Clear history',noHistory:'No battery history yet',noHistoryHelp:'The advanced chart will appear as readings arrive.',checkUpdate:'Check for updates',restart:'Apply and restart',updateState:'Status',commit:'Commit',message:'Change',checkedAt:'Last checked',copyDiagnostics:'Copy diagnostics',openLog:'Open log file',launchAtStartup:'Start automatically with Windows',launchAtStartupHelp:'Run in the notification area when you sign in.',taskbarWidget:'Taskbar battery indicator',taskbarWidgetHelp:'Show a headphone icon and battery percentage on the Windows 11 taskbar.',taskbarWidgetOffset:'Distance from right edge',taskbarWidgetOffsetHelp:'Adjust the indicator around the clock and system icons.',taskbarDeviceId:'Displayed device',taskbarDeviceIdHelp:'Automatic prefers a headset, otherwise the lowest battery.',automatic:'Automatic',notifyDisconnect:'Notify when disconnected',notifyDisconnectHelp:'Notify when G HUB or a device disconnects.',historyEnabled:'Record battery history',historyEnabledHelp:'Keep seven days of battery and charging activity locally.',language:'Language',languageHelp:'Choose the dashboard language.',turkish:'T\xFCrk\xE7e',english:'English',idle:'Up to date',checking:'Checking',ready:'Ready to restart',error:'Error',copied:'Copied',deviceCount:'Active devices',averageBattery:'Average battery',chargingNow:'Charging',lastSync:'Last sync',minLevel:'Lowest',maxLevel:'Highest',change:'Change',averageLevel:'Average',currentLevel:'Current',hourlyRate:'Hourly change',batteryLevel:'Battery level',sampleChange:'Since previous reading',chargingActivity:'Charging activity',last24Hours:'Last 24 hours',totalChargeTime:'Total charge time',sessions:'Charging sessions',currentState:'Current state',notCharging:'Not charging',hoursShort:'h',minutesShort:'m',dataPoints:'data points',trendStable:'Stable',trendDown:'Falling',trendUp:'Rising',batteryInsights:'Battery insights',timeRemaining:'Estimated time left',timeToFull:'Time to full',usageRate:'Usage rate',chargeRate:'Charge rate',chargingTime:'Charging time',usageTime:'Usage time',confidence:'Confidence',learning:'Learning from data',needsMoreData:'More readings needed',usageSegment:'Usage',chargeSegment:'Charging'}};
 const icons={overview:'<svg viewBox="0 0 24 24" fill="none"><path d="M4 13h6V4H4v9Zm0 7h6v-4H4v4Zm10 0h6v-9h-6v9Zm0-12h6V4h-6v4Z" stroke="currentColor" stroke-width="1.7"/></svg>',history:'<svg viewBox="0 0 24 24" fill="none"><path d="M4 18 9 12l4 3 7-9" stroke="currentColor" stroke-width="1.8"/><path d="M4 20h16" stroke="currentColor" opacity=".5"/></svg>',updates:'<svg viewBox="0 0 24 24" fill="none"><path d="M20 12a8 8 0 1 1-2.3-5.7L20 8.7M20 4v4.7h-4.7" stroke="currentColor" stroke-width="1.7"/></svg>',diagnostics:'<svg viewBox="0 0 24 24" fill="none"><path d="M9 4h6l1 3 3 1v8l-3 1-1 3H9l-1-3-3-1V8l3-1 1-3Z" stroke="currentColor" stroke-width="1.6"/><circle cx="12" cy="12" r="3" stroke="currentColor"/></svg>',settings:'<svg viewBox="0 0 24 24" fill="none"><path d="M4 7h10M18 7h2M4 17h2m4 0h10M14 4v6M6 14v6" stroke="currentColor" stroke-width="1.7"/></svg>'};
 let state,activeTab='overview',activeRange=24,activeSeriesKey;
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));const t=k=>words[state?.settings?.language||'tr'][k]||k;const color=v=>v==null?'#70798a':v<=5?'#ff5d6c':v<=20?'#ff8c42':v<=50?'#f5c451':'#39d98a';const date=v=>v?new Intl.DateTimeFormat(state.settings.language,{dateStyle:'short',timeStyle:'short'}).format(new Date(v)):'\u2014';const time=v=>v?new Intl.DateTimeFormat(state.settings.language,{hour:'2-digit',minute:'2-digit'}).format(new Date(v)):'\u2014';const duration=ms=>{const n=Math.max(0,Math.round(ms/60000)),h=Math.floor(n/60),m=n%60;return(h?h+' '+t('hoursShort')+' ':'')+m+' '+t('minutesShort')};
@@ -3909,13 +3923,17 @@ function renderStats(){const online=state.devices.filter(d=>d.connected),levels=
 function renderDevices(){const el=document.getElementById('devices'),loading=state.connection.reconnecting&&!state.connection.connected,notice=loading?'<div class="glass reconnect-placeholder"><i class="spinner"></i><div><strong>'+t('reconnecting')+'</strong><small>'+t('reconnectingHelp')+'</small></div></div>':'';if(!state.devices.length){if(loading){el.innerHTML=notice+[1,2,3].map(()=>'<article class="glass loading-card"><div class="skeleton sk-head"></div><div class="skeleton sk-sub"></div><div class="skeleton sk-track"></div><div class="skeleton sk-foot"></div></article>').join('');return}el.innerHTML='<div class="glass empty"><div><strong>'+t('noDevices')+'</strong>'+t('noDevicesHelp')+'</div></div>';return}el.innerHTML=notice+state.devices.map(d=>{const c=color(d.percentage),status=d.charging?'charging':d.connected?'online':'offline';return'<article class="glass device-card"><div class="device-top"><div class="device-ident"><i class="device-icon"><svg viewBox="0 0 24 24" fill="none"><path d="M8 3.5h8a3 3 0 0 1 3 3v11a3 3 0 0 1-3 3H8a3 3 0 0 1-3-3v-11a3 3 0 0 1 3-3Z" stroke="currentColor" stroke-width="1.5"/><path d="M9 7h6M9 17h6" stroke="currentColor" opacity=".55"/></svg></i><div style="min-width:0"><div class="device-name">'+esc(d.name)+'</div><div class="device-model">'+esc(d.model)+'</div></div></div><div class="battery-number" style="color:'+c+'">'+(d.percentage==null?'\u2014':d.percentage+'%')+'</div></div><div class="battery-track"><div class="battery-fill" style="width:'+(d.percentage||0)+'%;background:'+c+';color:'+c+'"></div></div><div class="device-foot"><span class="inline-status '+status+'"><i class="mini-dot"></i>'+(d.charging?t('charging'):d.connected?t('online'):t('offline'))+'</span><span>'+date(d.updatedAt)+'</span></div></article>'}).join('')}
 const entries=()=>Object.entries(state.history).filter(([,s])=>s.points?.length).sort((a,b)=>(b[1].points.at(-1)?.timestamp||0)-(a[1].points.at(-1)?.timestamp||0));function filtered(points,hours){const cut=Date.now()-hours*3600000,before=[...points].reverse().find(p=>p.timestamp<cut),inside=points.filter(p=>p.timestamp>=cut);return before?[{...before,timestamp:cut},...inside]:inside}function smooth(c){if(c.length<2)return c.length?'M '+c[0][0]+' '+c[0][1]:'';let d='M '+c[0][0]+' '+c[0][1];for(let i=1;i<c.length;i++){const a=c[i-1],b=c[i],m=(a[0]+b[0])/2;d+=' C '+m+' '+a[1]+' '+m+' '+b[1]+' '+b[0]+' '+b[1]}return d}
 function renderSeries(){const e=entries();if(!activeSeriesKey||!state.history[activeSeriesKey])activeSeriesKey=e[0]?.[0];document.getElementById('series-tabs').innerHTML=e.map(([k,s])=>'<button class="series-tab '+(k===activeSeriesKey?'active':'')+'" data-series="'+esc(k)+'">'+esc(s.name)+'</button>').join('');document.querySelectorAll('#ranges button').forEach(b=>b.classList.toggle('active',Number(b.dataset.range)===activeRange))}
-function renderChart(){const panel=document.getElementById('chart'),series=state.history[activeSeriesKey];if(!series){panel.innerHTML='<div class="empty"><div><strong>'+t('noHistory')+'</strong>'+t('noHistoryHelp')+'</div></div>';document.getElementById('charge').innerHTML=panel.innerHTML;return}const pts=filtered(series.points,activeRange);if(!pts.length){panel.innerHTML='<div class="empty"><div><strong>'+t('noHistory')+'</strong>'+t('noHistoryHelp')+'</div></div>';renderCharge(series.points);return}const start=Date.now()-activeRange*3600000,end=Date.now(),coords=pts.map(p=>[Math.max(0,Math.min(100,(p.timestamp-start)/(end-start)*100)),88-p.percentage*.78]),line=smooth(coords),area=line+' L '+coords.at(-1)[0]+' 92 L '+coords[0][0]+' 92 Z',levels=[100,75,50,25,0],grid=levels.map(v=>{const y=88-v*.78;return'<line class="chart-grid" x1="6" y1="'+y+'" x2="98" y2="'+y+'"/>'}).join('')+[0,1,2,3,4].map(i=>'<line class="chart-grid vertical" x1="'+(6+i*23)+'" y1="10" x2="'+(6+i*23)+'" y2="92"/>').join(''),first=pts[0].percentage,last=pts.at(-1).percentage,min=Math.min(...pts.map(p=>p.percentage)),max=Math.max(...pts.map(p=>p.percentage)),avg=Math.round(pts.reduce((sum,p)=>sum+p.percentage,0)/pts.length),delta=last-first,elapsed=Math.max(1/60,(pts.at(-1).timestamp-pts[0].timestamp)/3600000),rate=(delta/elapsed).toFixed(1),ticks=[0,.25,.5,.75,1].map(v=>'<span>'+time(start+(end-start)*v)+'</span>').join('');panel.innerHTML='<div class="panel-head"><div><h2>'+esc(series.name)+'</h2><p class="subtitle">'+pts.length+' '+t('dataPoints')+'</p></div><span class="badge">'+(delta<-1?t('trendDown'):delta>1?t('trendUp'):t('trendStable'))+'</span></div><div class="chart-wrap" id="chart-wrap"><div class="chart-scale"><span>100</span><span>75</span><span>50</span><span>25</span><span>0</span></div><div class="chart-time-scale">'+ticks+'</div><svg viewBox="0 0 100 100" preserveAspectRatio="none"><defs><linearGradient id="lineGradient"><stop stop-color="#67e8f9"/><stop offset="1" stop-color="#388bff"/></linearGradient><linearGradient id="areaGradient" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#368eff" stop-opacity=".34"/><stop offset="1" stop-color="#368eff" stop-opacity="0"/></linearGradient></defs>'+grid+'<path class="chart-area" d="'+area+'"/><path class="chart-line" d="'+line+'"/><line id="cursor" class="chart-cursor" y1="10" y2="92"/><circle id="point" class="chart-point" r="1.5"/><rect id="hit" width="100" height="92" fill="transparent" style="cursor:crosshair"/></svg><div id="tip" class="tooltip"></div></div><div class="chart-legend"><i class="legend-dot"></i><span>'+t('batteryLevel')+'</span><span>\xB7</span><span>'+date(pts[0].timestamp)+' \u2014 '+date(pts.at(-1).timestamp)+'</span></div><div class="chart-summary"><div class="metric"><span>'+t('minLevel')+'</span><strong>'+min+'%</strong></div><div class="metric"><span>'+t('maxLevel')+'</span><strong>'+max+'%</strong></div><div class="metric"><span>'+t('averageLevel')+'</span><strong>'+avg+'%</strong></div><div class="metric"><span>'+t('currentLevel')+'</span><strong>'+last+'%</strong></div><div class="metric"><span>'+t('change')+'</span><strong style="color:'+(delta<0?'var(--orange)':delta>0?'var(--green)':'#cbd2df')+'">'+(delta>0?'+':'')+delta+'%</strong></div><div class="metric"><span>'+t('hourlyRate')+'</span><strong>'+(rate>0?'+':'')+rate+'%/h</strong></div></div>';bindChart(pts,start,end);renderCharge(series.points)}
+function renderChart(){const panel=document.getElementById('chart'),series=state.history[activeSeriesKey];if(!series){panel.innerHTML='<div class="empty"><div><strong>'+t('noHistory')+'</strong>'+t('noHistoryHelp')+'</div></div>';document.getElementById('charge').innerHTML=panel.innerHTML;document.getElementById('insights').innerHTML='';return}const pts=filtered(series.points,activeRange);if(!pts.length){panel.innerHTML='<div class="empty"><div><strong>'+t('noHistory')+'</strong>'+t('noHistoryHelp')+'</div></div>';renderCharge(series.points);return}const start=Date.now()-activeRange*3600000,end=Date.now(),coords=pts.map(p=>[Math.max(0,Math.min(100,(p.timestamp-start)/(end-start)*100)),88-p.percentage*.78]),line=smooth(coords),area=line+' L '+coords.at(-1)[0]+' 92 L '+coords[0][0]+' 92 Z',chargeBands=chartChargingBands(pts,start,end),levels=[100,75,50,25,0],grid=levels.map(v=>{const y=88-v*.78;return'<line class="chart-grid" x1="6" y1="'+y+'" x2="98" y2="'+y+'"/>'}).join('')+[0,1,2,3,4].map(i=>'<line class="chart-grid vertical" x1="'+(6+i*23)+'" y1="10" x2="'+(6+i*23)+'" y2="92"/>').join(''),first=pts[0].percentage,last=pts.at(-1).percentage,min=Math.min(...pts.map(p=>p.percentage)),max=Math.max(...pts.map(p=>p.percentage)),avg=Math.round(pts.reduce((sum,p)=>sum+p.percentage,0)/pts.length),delta=last-first,elapsed=Math.max(1/60,(pts.at(-1).timestamp-pts[0].timestamp)/3600000),rate=(delta/elapsed).toFixed(1),ticks=[0,.25,.5,.75,1].map(v=>'<span>'+time(start+(end-start)*v)+'</span>').join('');panel.innerHTML='<div class="panel-head"><div><h2>'+esc(series.name)+'</h2><p class="subtitle">'+pts.length+' '+t('dataPoints')+'</p></div><span class="badge">'+(delta<-1?t('trendDown'):delta>1?t('trendUp'):t('trendStable'))+'</span></div><div class="chart-wrap" id="chart-wrap"><div class="chart-scale"><span>100</span><span>75</span><span>50</span><span>25</span><span>0</span></div><div class="chart-time-scale">'+ticks+'</div><svg viewBox="0 0 100 100" preserveAspectRatio="none"><defs><linearGradient id="lineGradient"><stop stop-color="#67e8f9"/><stop offset="1" stop-color="#388bff"/></linearGradient><linearGradient id="areaGradient" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#368eff" stop-opacity=".34"/><stop offset="1" stop-color="#368eff" stop-opacity="0"/></linearGradient></defs>'+chargeBands+grid+'<path class="chart-area" d="'+area+'"/><path class="chart-line" d="'+line+'"/><line id="cursor" class="chart-cursor" y1="10" y2="92"/><circle id="point" class="chart-point" r="1.5"/><rect id="hit" width="100" height="92" fill="transparent" style="cursor:crosshair"/></svg><div id="tip" class="tooltip"></div></div><div class="chart-legend"><i class="legend-dot"></i><span>'+t('batteryLevel')+'</span><i class="legend-dot charge"></i><span>'+t('chargeSegment')+'</span><span>\xB7</span><span>'+date(pts[0].timestamp)+' \u2014 '+date(pts.at(-1).timestamp)+'</span></div><div class="chart-summary"><div class="metric"><span>'+t('minLevel')+'</span><strong>'+min+'%</strong></div><div class="metric"><span>'+t('maxLevel')+'</span><strong>'+max+'%</strong></div><div class="metric"><span>'+t('averageLevel')+'</span><strong>'+avg+'%</strong></div><div class="metric"><span>'+t('currentLevel')+'</span><strong>'+last+'%</strong></div><div class="metric"><span>'+t('change')+'</span><strong style="color:'+(delta<0?'var(--orange)':delta>0?'var(--green)':'#cbd2df')+'">'+(delta>0?'+':'')+delta+'%</strong></div><div class="metric"><span>'+t('hourlyRate')+'</span><strong>'+(rate>0?'+':'')+rate+'%/h</strong></div></div>';bindChart(pts,start,end);renderCharge(series.points);renderInsights(series,pts)}
+function chartChargingBands(pts,start,end){if(pts.length<2)return'';let html='';for(let i=0;i<pts.length;i++){const p=pts[i],next=Math.min(end,pts[i+1]?.timestamp||end);if(next<=start||p.timestamp>=end)continue;const x=Math.max(0,(Math.max(start,p.timestamp)-start)/(end-start)*100),w=Math.max(.25,(Math.min(end,next)-Math.max(start,p.timestamp))/(end-start)*100);html+='<rect class="'+(p.charging?'charge-band':'usage-band')+'" x="'+x+'" y="10" width="'+w+'" height="82"/>';if(p.charging)html+='<line class="charge-band-line" x1="'+x+'" y1="10" x2="'+x+'" y2="92"/>'}return html}
+function rateStats(points,charging){let hours=0,delta=0,samples=0;for(let i=1;i<points.length;i++){const a=points[i-1],b=points[i],h=(b.timestamp-a.timestamp)/3600000;if(h<=0||h>8||a.charging!==charging)continue;const d=b.percentage-a.percentage;if(charging&&d>0){delta+=d;hours+=h;samples++}if(!charging&&d<0){delta+=-d;hours+=h;samples++}}return{rate:hours?delta/hours:0,hours,samples}}
+function pct(n){return Math.max(0,Math.min(100,Math.round(n)))+'%'}
+function renderInsights(series,pts){const all=series.points||[],recent=filtered(all,168),last=pts.at(-1),drain=rateStats(recent,false),charge=rateStats(recent,true),chargeInfo=chargeData(all),usageMs=Math.max(0,86400000-chargeInfo.total);let primary=t('needsMoreData'),primaryLabel=t('timeRemaining'),primaryHint=t('learning');if(last){if(last.charging){primaryLabel=t('timeToFull');if(charge.rate>0){primary=duration((100-last.percentage)/charge.rate*3600000);primaryHint='+'+charge.rate.toFixed(1)+'%/h'}}else if(drain.rate>0){primary=duration(last.percentage/drain.rate*3600000);primaryHint='-'+drain.rate.toFixed(1)+'%/h'}}const cards=[[primaryLabel,primary,primaryHint],[t('usageRate'),drain.rate?'-'+drain.rate.toFixed(1)+'%/h':'\u2014',drain.samples?t('confidence')+': '+pct(Math.min(100,drain.samples*18)):t('learning')],[t('chargeRate'),charge.rate?'+'+charge.rate.toFixed(1)+'%/h':'\u2014',charge.samples?t('confidence')+': '+pct(Math.min(100,charge.samples*18)):t('learning')],[t('chargingTime'),duration(chargeInfo.total),t('usageTime')+': '+duration(usageMs)]];document.getElementById('insights').innerHTML=cards.map(c=>'<article class="glass insight-card"><span>'+c[0]+'</span><strong>'+c[1]+'</strong><small>'+c[2]+'</small></article>').join('')}
 function bindChart(pts,start,end){const wrap=document.getElementById('chart-wrap'),hit=document.getElementById('hit'),tip=document.getElementById('tip'),cursor=document.getElementById('cursor'),dot=document.getElementById('point');hit.addEventListener('pointermove',e=>{const rect=wrap.getBoundingClientRect(),target=start+Math.max(0,Math.min(1,(e.clientX-rect.left)/rect.width))*(end-start);let index=0;for(let i=1;i<pts.length;i++)if(Math.abs(pts[i].timestamp-target)<Math.abs(pts[index].timestamp-target))index=i;const n=pts[index],previous=pts[index-1],sampleDelta=previous?n.percentage-previous.percentage:0,x=Math.max(0,Math.min(100,(n.timestamp-start)/(end-start)*100)),y=88-n.percentage*.78,px=x/100*rect.width,py=y/100*rect.height;cursor.setAttribute('x1',x);cursor.setAttribute('x2',x);dot.setAttribute('cx',x);dot.setAttribute('cy',y);cursor.style.opacity=dot.style.opacity=tip.style.opacity='1';tip.style.left=Math.max(78,Math.min(rect.width-78,px))+'px';tip.style.top=py+'px';tip.style.transform=y<30?'translate(-50%,14px)':'translate(-50%,-112%)';tip.innerHTML='<strong>'+n.percentage+'%</strong><span>'+date(n.timestamp)+(n.charging?' \xB7 '+t('charging'):'')+'</span><em>'+t('sampleChange')+': '+(sampleDelta>0?'+':'')+sampleDelta+'%</em>'});hit.addEventListener('pointerleave',()=>{cursor.style.opacity=dot.style.opacity=tip.style.opacity='0'})}
 function chargeData(points){const start=Date.now()-86400000,end=Date.now(),all=points.filter(p=>p.timestamp<=end),before=[...all].reverse().find(p=>p.timestamp<start),active=(before?[{...before,timestamp:start}]:[]).concat(all.filter(p=>p.timestamp>=start));let total=0,sessions=0,was=false;const seg=[];for(let i=0;i<active.length;i++){const p=active[i],next=Math.min(end,active[i+1]?.timestamp||end);if(p.charging&&next>p.timestamp){if(was&&seg.length)seg[seg.length-1][1]=next;else{seg.push([p.timestamp,next]);sessions++}total+=next-p.timestamp}was=p.charging}return{start,end,total,sessions,seg,current:active.at(-1)?.charging||false}}
 function renderCharge(points){const d=chargeData(points),span=d.end-d.start,bars=d.seg.map(s=>'<i class="charge-segment" style="left:'+((s[0]-d.start)/span*100)+'%;width:'+((s[1]-s[0])/span*100)+'%"></i>').join('');document.getElementById('charge').innerHTML='<div class="panel-head"><div><h2>'+t('chargingActivity')+'</h2><p class="subtitle">'+t('last24Hours')+'</p></div><span class="badge" style="color:'+(d.current?'var(--green)':'#c7ceda')+'">'+(d.current?t('charging'):t('notCharging'))+'</span></div><div class="charge-total">'+duration(d.total)+' <small>'+t('totalChargeTime').toLowerCase()+'</small></div><div class="timeline">'+bars+'</div><div class="timeline-labels"><span>-24h</span><span>-18h</span><span>-12h</span><span>-6h</span><span>'+time(Date.now())+'</span></div><div class="facts"><div class="fact"><span>'+t('sessions')+'</span><strong>'+d.sessions+'</strong></div><div class="fact"><span>'+t('currentState')+'</span><strong>'+(d.current?t('charging'):t('notCharging'))+'</strong></div></div>'}
 function renderUpdate(){const u=state.update;document.getElementById('update').innerHTML='<div class="panel-head"><div><h2>'+t('updateState')+'</h2><p class="subtitle">'+t(u.phase)+'</p></div><span class="badge">'+t(u.phase)+'</span></div><div class="stack"><div class="data-row"><span>'+t('commit')+'</span><strong>'+esc(u.commit||'\u2014')+'</strong></div><div class="data-row"><span>'+t('message')+'</span><strong>'+esc(u.message||u.detail||'\u2014')+'</strong></div><div class="data-row"><span>'+t('checkedAt')+'</span><strong>'+date(u.checkedAt)+'</strong></div></div><div class="actions" style="margin-top:16px"><button class="button" data-action="check-update" '+(u.phase==='checking'?'disabled':'')+'>'+t('checkUpdate')+'</button>'+(u.phase==='ready'?'<button class="button primary" data-action="restart-update">'+t('restart')+'</button>':'')+'</div>'}
 function renderDiagnostics(){const d=state.diagnostics;document.getElementById('diagnostics-text').textContent=['App: '+state.app.name+' '+state.app.version,'Platform: '+d.platform+' '+d.arch,'Electron: '+d.electron,'Node: '+d.node,'G HUB: '+(state.connection.connected?'connected':'disconnected'),'Last connected: '+date(state.connection.lastConnectedAt),'Last disconnected: '+date(state.connection.lastDisconnectedAt),'Last error: '+(state.connection.lastError||'\u2014'),'Devices: '+state.devices.length,'Update: '+state.update.phase,'User data: '+d.userData,'Log: '+d.logPath].join('\\n')}
-function renderSettings(){const s=state.settings,set=(key,help,input)=>'<label class="setting" style="display:flex;align-items:center;justify-content:space-between;gap:20px"><span class="setting-copy"><strong>'+t(key)+'</strong><small>'+t(help)+'</small></span>'+input+'</label>';document.getElementById('settings-list').innerHTML=set('launchAtStartup','launchAtStartupHelp','<input type="checkbox" data-setting="launchAtStartup" '+(s.launchAtStartup?'checked':'')+'>')+set('notifyDisconnect','notifyDisconnectHelp','<input type="checkbox" data-setting="notifyDisconnect" '+(s.notifyDisconnect?'checked':'')+'>')+set('historyEnabled','historyEnabledHelp','<input type="checkbox" data-setting="historyEnabled" '+(s.historyEnabled?'checked':'')+'>')+set('language','languageHelp','<select data-setting="language"><option value="tr" '+(s.language==='tr'?'selected':'')+'>'+t('turkish')+'</option><option value="en" '+(s.language==='en'?'selected':'')+'>'+t('english')+'</option></select>')}
+function renderSettings(){const s=state.settings,set=(key,help,input)=>'<label class="setting" style="display:flex;align-items:center;justify-content:space-between;gap:20px"><span class="setting-copy"><strong>'+t(key)+'</strong><small>'+t(help)+'</small></span>'+input+'</label>';document.getElementById('settings-list').innerHTML=set('launchAtStartup','launchAtStartupHelp','<input type="checkbox" data-setting="launchAtStartup" '+(s.launchAtStartup?'checked':'')+'>')+set('taskbarWidget','taskbarWidgetHelp','<input type="checkbox" data-setting="taskbarWidget" '+(s.taskbarWidget?'checked':'')+'>')+set('taskbarWidgetOffset','taskbarWidgetOffsetHelp','<select data-setting="taskbarWidgetOffset">'+[120,160,200,240,280,320,400,480,600].map(n=>'<option value="'+n+'" '+(Number(s.taskbarWidgetOffset)===n?'selected':'')+'>'+n+' px</option>').join('')+'</select>')+set('taskbarDeviceId','taskbarDeviceIdHelp','<select data-setting="taskbarDeviceId"><option value="auto" '+(s.taskbarDeviceId==='auto'?'selected':'')+'>'+t('automatic')+'</option>'+state.devices.map(d=>'<option value="'+esc(d.id)+'" '+(s.taskbarDeviceId===d.id?'selected':'')+'>'+esc(d.name)+'</option>').join('')+'</select>')+set('notifyDisconnect','notifyDisconnectHelp','<input type="checkbox" data-setting="notifyDisconnect" '+(s.notifyDisconnect?'checked':'')+'>')+set('historyEnabled','historyEnabledHelp','<input type="checkbox" data-setting="historyEnabled" '+(s.historyEnabled?'checked':'')+'>')+set('language','languageHelp','<select data-setting="language"><option value="tr" '+(s.language==='tr'?'selected':'')+'>'+t('turkish')+'</option><option value="en" '+(s.language==='en'?'selected':'')+'>'+t('english')+'</option></select>')}
 function render(next){state=next;document.documentElement.lang=state.settings.language;const connectionLabel=state.connection.connected?t('connected'):state.connection.reconnecting?t('reconnecting'):t('disconnected'),titleDot=document.getElementById('title-dot');document.getElementById('title-state').textContent=connectionLabel;titleDot.classList.toggle('online',state.connection.connected);titleDot.classList.toggle('reconnecting',!state.connection.connected&&state.connection.reconnecting);document.getElementById('version').textContent='v'+state.app.version;document.getElementById('side-state').textContent=connectionLabel;document.querySelectorAll('[data-t]').forEach(el=>el.textContent=t(el.dataset.t));renderNav();renderStats();renderDevices();renderSeries();renderChart();renderUpdate();renderDiagnostics();renderSettings();for(const [a,k] of [['refresh','refresh'],['reconnect','reconnect'],['clear-history','clearHistory'],['copy-diagnostics','copyDiagnostics'],['open-log','openLog']]){const el=document.querySelector('[data-action="'+a+'"]');if(el)el.textContent=a==='reconnect'&&state.connection.reconnecting?t('reconnecting'):t(k)}const reconnect=document.querySelector('[data-action="reconnect"]');if(reconnect)reconnect.disabled=Boolean(state.connection.reconnecting)}
 document.addEventListener('click',async e=>{const w=e.target.closest('[data-window]')?.dataset.window;if(w==='minimize')return api.minimizeWindow();if(w==='maximize')return api.toggleMaximizeWindow();if(w==='close')return api.closeWindow();const tab=e.target.closest('[data-tab]');if(tab){activeTab=tab.dataset.tab;renderNav();return}const range=e.target.closest('[data-range]');if(range){activeRange=Number(range.dataset.range);renderSeries();renderChart();return}const series=e.target.closest('[data-series]');if(series){activeSeriesKey=series.dataset.series;renderSeries();renderChart();return}const a=e.target.closest('[data-action]')?.dataset.action;if(a==='refresh')await api.refresh();if(a==='reconnect')await api.reconnect();if(a==='check-update')await api.checkUpdate();if(a==='restart-update')await api.restartUpdate();if(a==='clear-history')await api.clearHistory();if(a==='open-log')await api.openLog();if(a==='copy-diagnostics'){await api.copyDiagnostics();e.target.textContent=t('copied')}});document.addEventListener('change',async e=>{const k=e.target.dataset.setting;if(k)await api.updateSettings({[k]:e.target.type==='checkbox'?e.target.checked:e.target.value})});document.querySelector('.titlebar').addEventListener('dblclick',e=>{if(!e.target.closest('[data-window]'))api.toggleMaximizeWindow()});api.onState(render);api.getState().then(render);
 </script></body></html>`;
@@ -3995,9 +4013,9 @@ var GHubClient = class extends import_node_events.EventEmitter {
     this.reconnectTimer = setTimeout(() => this.connect(), this.reconnectDelay);
     this.reconnectDelay = Math.min(this.reconnectDelay * 2, 3e4);
   }
-  send(verb, path5) {
+  send(verb, path6) {
     if (this.socket?.readyState !== wrapper_default.OPEN) return;
-    this.socket.send(JSON.stringify({ msgId: (0, import_node_crypto.randomUUID)(), verb, path: path5 }));
+    this.socket.send(JSON.stringify({ msgId: (0, import_node_crypto.randomUUID)(), verb, path: path6 }));
   }
   subscribe() {
     this.send("SUBSCRIBE", "/battery/state/changed");
@@ -4055,6 +4073,7 @@ var messages = {
     restart: "Yeniden ba\u015Flat",
     openGHub: "G HUB'\u0131 a\xE7",
     launchAtStartup: "Windows ile ba\u015Flat",
+    taskbarWidget: "G\xF6rev \xE7ubu\u011Funda pil g\xF6stergesi",
     language: "Dil",
     exit: "\xC7\u0131k\u0131\u015F",
     disconnectedTitle: "G HUB ba\u011Flant\u0131s\u0131 kesildi",
@@ -4077,6 +4096,7 @@ var messages = {
     restart: "Restart",
     openGHub: "Open G HUB",
     launchAtStartup: "Start with Windows",
+    taskbarWidget: "Taskbar battery indicator",
     language: "Language",
     exit: "Quit",
     disconnectedTitle: "G HUB disconnected",
@@ -4163,6 +4183,140 @@ var StateStore = class {
   }
 };
 
+// src/taskbar-widget.ts
+var import_electron = require("electron");
+var import_promises4 = require("node:fs/promises");
+var import_node_path4 = __toESM(require("node:path"));
+
+// src/taskbar-reading.ts
+var STALE_AFTER_MS = 3 * 6e4;
+function isHeadset(device) {
+  return /headset|headphone|kulaklık|g\s*(?:733|535|435|935|933|635|432|332)|g\s*pro\s*x(?!\s*(?:superlight|mouse))/i.test(`${device.name} ${device.model}`);
+}
+function selectTaskbarReading(devices2, connected2, now = Date.now(), preferredId = "auto") {
+  const eligible = connected2 ? devices2.filter((device) => device.connected && device.percentage !== void 0 && device.updatedAt !== void 0 && now - device.updatedAt >= 0 && now - device.updatedAt < STALE_AFTER_MS).sort((a, b) => (a.percentage ?? 101) - (b.percentage ?? 101)) : [];
+  const active = preferredId === "auto" ? eligible.find(isHeadset) ?? eligible[0] : eligible.find((device) => device.id === preferredId);
+  if (!active) return { name: "", charging: false, tone: "neutral", kind: "battery" };
+  return {
+    name: active.name,
+    percentage: active.percentage,
+    charging: active.charging,
+    tone: active.charging ? "charging" : (active.percentage ?? 100) <= 20 ? "low" : "normal",
+    kind: isHeadset(active) ? "headset" : "battery"
+  };
+}
+
+// src/taskbar-widget.ts
+var WIDTH = 94;
+var PRELOAD = `const { ipcRenderer } = require('electron');
+window.addEventListener('DOMContentLoaded', () => {
+  const button = document.querySelector('button');
+  const level = document.getElementById('level');
+  button.addEventListener('click', () => ipcRenderer.send('taskbar:open'));
+  ipcRenderer.on('taskbar:state', (_event, state) => {
+    level.textContent = state.percentage == null ? '\u2014' : state.percentage + '%';
+    button.dataset.tone = state.tone;
+    button.dataset.kind = state.kind;
+    button.title = state.name ? state.name + ': ' + level.textContent + (state.charging ? ' \u26A1' : '') : state.waiting;
+    button.setAttribute('aria-label', button.title);
+  });
+});`;
+var HTML = `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'"><style>
+*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;background:transparent;font-family:'Segoe UI',sans-serif}
+button{width:100%;height:100%;border:0;border-radius:7px;background:#15181edc;color:#f2f3f5;display:flex;align-items:center;justify-content:center;gap:8px;padding:0 7px;cursor:pointer;font-size:12px;font-variant-numeric:tabular-nums;white-space:nowrap}
+button:hover,button:focus-visible{background:#30343c;outline:1px solid #ffffff30}svg{width:16px;height:16px;flex:none;stroke:currentColor}button[data-kind=headset] .battery-icon,button:not([data-kind=headset]) .headset-icon{display:none}button[data-tone=low]{color:#ff9a70}button[data-tone=charging]{color:#8fddbd}button[data-tone=neutral]{color:#9299a5}
+</style></head><body><button type="button" aria-label="Battery" data-tone="neutral" data-kind="battery"><svg class="headset-icon" viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 13v-2a8 8 0 0 1 16 0v2M4 13h2a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-3a2 2 0 0 1 1-2Zm16 0h-2a2 2 0 0 0-2 2v3a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-1-2Z"/></svg><svg class="battery-icon" viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><rect x="2" y="6" width="18" height="12" rx="2"/><path d="M22 10v4M5 9v6"/></svg><span id="level">\u2014</span></button></body></html>`;
+var TaskbarWidget = class {
+  constructor(userData, openDashboard2) {
+    this.userData = userData;
+    this.openDashboard = openDashboard2;
+    if (process.platform !== "win32") return;
+    import_electron.ipcMain.on("taskbar:open", (event) => {
+      if (event.sender === this.window?.webContents) this.openDashboard();
+    });
+    const reposition = () => this.position();
+    import_electron.screen.on("display-metrics-changed", reposition);
+    import_electron.screen.on("display-added", reposition);
+    import_electron.screen.on("display-removed", reposition);
+  }
+  window;
+  reading = { name: "", charging: false, tone: "neutral", kind: "battery" };
+  settings;
+  waiting = "Waiting for G HUB";
+  update(devices2, connected2, settings, waiting) {
+    if (process.platform !== "win32") return;
+    this.settings = settings;
+    this.waiting = waiting;
+    this.reading = selectTaskbarReading(devices2, connected2, Date.now(), settings.taskbarDeviceId);
+    if (!settings.taskbarWidget) {
+      this.window?.hide();
+      return;
+    }
+    if (!this.window) void this.create().catch((error) => console.error("Taskbar widget could not open:", error));
+    this.position();
+    this.sendState();
+  }
+  async create() {
+    if (this.window) return;
+    const preloadDirectory = import_node_path4.default.join(this.userData, "runtime");
+    await (0, import_promises4.mkdir)(preloadDirectory, { recursive: true });
+    const preloadPath = import_node_path4.default.join(preloadDirectory, "taskbar-preload.cjs");
+    await (0, import_promises4.writeFile)(preloadPath, PRELOAD, "utf8");
+    if (!this.settings?.taskbarWidget || this.window) return;
+    const window = new import_electron.BrowserWindow({
+      width: WIDTH,
+      height: 36,
+      show: false,
+      frame: false,
+      transparent: true,
+      resizable: false,
+      movable: false,
+      skipTaskbar: true,
+      focusable: true,
+      autoHideMenuBar: true,
+      webPreferences: {
+        preload: preloadPath,
+        contextIsolation: true,
+        nodeIntegration: false,
+        sandbox: false
+      }
+    });
+    this.window = window;
+    window.setAlwaysOnTop(true, "normal");
+    window.on("closed", () => {
+      if (this.window === window) this.window = void 0;
+    });
+    window.webContents.on("did-finish-load", () => {
+      this.sendState();
+      this.position();
+    });
+    await window.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(HTML)}`);
+  }
+  position() {
+    if (!this.window || this.window.isDestroyed() || !this.settings?.taskbarWidget) return;
+    const display = import_electron.screen.getPrimaryDisplay();
+    const bottomTaskbarHeight = display.bounds.y + display.bounds.height - (display.workArea.y + display.workArea.height);
+    if (bottomTaskbarHeight < 30 || bottomTaskbarHeight > 100 || display.workArea.x !== display.bounds.x || display.workArea.y !== display.bounds.y) {
+      this.window.hide();
+      return;
+    }
+    const height = Math.min(36, bottomTaskbarHeight - 4);
+    const x = display.bounds.x + display.bounds.width - WIDTH - this.settings.taskbarWidgetOffset;
+    const y = display.bounds.y + display.bounds.height - Math.round((bottomTaskbarHeight + height) / 2);
+    this.window.setBounds({ x, y, width: WIDTH, height });
+    if (!this.window.webContents.isLoading()) this.window.showInactive();
+  }
+  sendState() {
+    if (!this.window || this.window.isDestroyed() || this.window.webContents.isLoading()) return;
+    this.window.webContents.send("taskbar:state", { ...this.reading, waiting: this.waiting });
+  }
+  destroy() {
+    import_electron.ipcMain.removeAllListeners("taskbar:open");
+    this.window?.destroy();
+    this.window = void 0;
+  }
+};
+
 // src/main.ts
 var APP_ID = "com.battincik.logitechbatteryapi";
 var APP_NAME = "Logitech Developer Tool";
@@ -4173,6 +4327,7 @@ var client;
 var store;
 var appStore;
 var logger;
+var taskbarWidget;
 var dashboardWindow;
 var connected = false;
 var hasConnected = false;
@@ -4182,26 +4337,26 @@ var lastConnectionError;
 var reconnecting = true;
 var isQuitting = false;
 var devices = /* @__PURE__ */ new Map();
-import_electron.app.setName(APP_NAME);
-import_electron.app.setAppUserModelId(APP_ID);
-import_electron.app.setPath("userData", import_node_path4.default.join(import_electron.app.getPath("appData"), LEGACY_APP_NAME));
+import_electron2.app.setName(APP_NAME);
+import_electron2.app.setAppUserModelId(APP_ID);
+import_electron2.app.setPath("userData", import_node_path5.default.join(import_electron2.app.getPath("appData"), LEGACY_APP_NAME));
 async function registerWindowsNotificationIdentity() {
-  if (process.platform !== "win32" || !import_electron.app.isPackaged) return;
-  const programsPath = import_node_path4.default.join(
-    import_electron.app.getPath("appData"),
+  if (process.platform !== "win32" || !import_electron2.app.isPackaged) return;
+  const programsPath = import_node_path5.default.join(
+    import_electron2.app.getPath("appData"),
     "Microsoft",
     "Windows",
     "Start Menu",
     "Programs"
   );
-  const shortcutPath = import_node_path4.default.join(programsPath, `${APP_NAME}.lnk`);
-  import_electron.shell.writeShortcutLink(shortcutPath, "create", {
+  const shortcutPath = import_node_path5.default.join(programsPath, `${APP_NAME}.lnk`);
+  import_electron2.shell.writeShortcutLink(shortcutPath, "create", {
     target: process.execPath,
-    cwd: import_node_path4.default.dirname(process.execPath),
+    cwd: import_node_path5.default.dirname(process.execPath),
     description: APP_NAME,
     appUserModelId: APP_ID
   });
-  await (0, import_promises4.unlink)(import_node_path4.default.join(programsPath, `${LEGACY_APP_NAME}.lnk`)).catch(() => void 0);
+  await (0, import_promises5.unlink)(import_node_path5.default.join(programsPath, `${LEGACY_APP_NAME}.lnk`)).catch(() => void 0);
 }
 var ICON_PNG = {
   green: "iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAABvElEQVQ4y8XTz08TQRQH8O/s7jDQ1i7gLAk2NV5rPGA8uOUiHjgZ4M6Fv0EFTPgLVAT9F/on4I9TDxASbU1I9KJ4Fpsm7AS3urUdd7rPE6VFG5t48B1n8v3k5eU94H8XO/9ARHipqjMncbQammjuR6KnUpYIJpzMXtZJPV3yZg8YO4s558J2qV5+WNNq9XXjA2pthZ9kICx+KS+8Zd8tLIemuUlEG4wx09cBEaFUL29/an6+u6Mq0En8W7vC4rgjb+Ja+srmyvT8OmMM1unnC1WdqWk1MAwAOonxSr1FTau1naByA8AZEMbR2pvGx4HhXqTaOMQ307zXB5yY77eP2sFQkz/SAb6a6BYR2V2g1dFTMZmhgHYSI+q0cgCcLjBmi+MRiw8FCMaRssUxANMFJvmF/cvCGwrIj3q4yLO7jLFOF8ja6Se+W8DfuhAWR9EtYNzJPOob4pJXPMgJubUofYgBiLA4FmUROSGfLUj/HdCziYwxENGDUr3ccZ30eqVxiC86gE5ijDCO/KhE0b2KnJCPV6bnN07X+Y+38FxVr4dxdD800Vwr0d6YJYJxJ7M7wTNbC9J/33sL/1y/AMK/tR+ONtjoAAAAAElFTkSuQmCC",
@@ -4212,7 +4367,7 @@ var ICON_PNG = {
   blue: "iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAABkklEQVQ4y8WTwU5TURBAz9zb93xd1FoTeU/o2rjEWNdCIuAHyIeoiIlfoCLqf9QvqAuMSy3BpYnbphZNwCfGPnu5d1xUnoCoTVw4yztzzp1MZuB/hxx/UFWeb4fZ3OlK7pgbep2qWvlYj3hRq/BkKbNdETlZoKq23fP3B4WuvNoJvC8UFyA2MFMVLjcMWSJry017T0T2jwhUlXbPP373RW92Bp5v4dd2YwPXUsvFmqwtN+2qiPwUdAZ+9u1e2HrW84xOgA9LbjQtF2qmdT2zm+YgkTu983on/BEGGAXo7gb2nN4CKAWfnM73C51o8v2hkjuuqqotBYVnyoWJeEYBvnqdASqlILF8iM1kgtiM64H9EjkTycvpqkwkmK4KjUg2RMSXglpFHrUahr91ERtoNQynI3lwZIhLmelmiawvpPa3klMGFlNLlsjTxdRsAVQOkiKCqt5t97yvR3a1uxvoD8ebGBk4nwhXzhqyRB7+2MQxd/wXVaWzHS59dno7d8wVXs8l41vYqEeyvpCaN4dv4Z/jO4SHmcufJV4PAAAAAElFTkSuQmCC"
 };
 function makePngIcon(tone) {
-  return import_electron.nativeImage.createFromBuffer(Buffer.from(ICON_PNG[tone], "base64"));
+  return import_electron2.nativeImage.createFromBuffer(Buffer.from(ICON_PNG[tone], "base64"));
 }
 function getBatteryIconTone(percentage) {
   if (percentage === void 0) return "gray";
@@ -4240,21 +4395,22 @@ function getDisplayDevices() {
 function updateTray() {
   const listed = getDisplayDevices();
   const t = translator(appStore?.settings.language ?? "tr");
-  const active = listed.find((device) => !device.charging && device.percentage !== void 0) ?? listed.find((device) => device.percentage !== void 0);
+  taskbarWidget?.update(listed, connected, appStore.settings, t("waiting"));
+  const active = (connected ? listed.find((device) => device.connected && !device.charging && device.percentage !== void 0 && device.updatedAt && Date.now() - device.updatedAt < 18e4) : void 0) ?? (connected ? listed.find((device) => device.connected && device.percentage !== void 0 && device.updatedAt && Date.now() - device.updatedAt < 18e4) : void 0);
   tray.setImage(makeTrayIcon(active?.percentage, active?.charging));
   tray.setToolTip(
     listed.length ? listed.map((device) => {
-      const level = device.percentage === void 0 ? t("unknownBattery") : `%${device.percentage}`;
+      const level = !connected || !device.connected || !device.updatedAt || Date.now() - device.updatedAt >= 18e4 ? t("unknownBattery") : `%${device.percentage}`;
       return `${device.name}: ${level}${device.charging ? ` \xB7 ${t("charging")}` : ""}`;
     }).join("\n") : connected ? `${t("connected")} \xB7 ${t("noDevices")}` : t("waiting")
   );
   const deviceItems = listed.length ? listed.map((device) => ({
-    label: `${device.name} \u2014 ${device.percentage === void 0 ? t("unknownBattery") : `%${device.percentage}`}${device.charging ? " \u26A1" : ""}`,
+    label: `${device.name} \u2014 ${!connected || !device.connected || !device.updatedAt || Date.now() - device.updatedAt >= 18e4 ? t("unknownBattery") : `%${device.percentage}`}${device.charging ? " \u26A1" : ""}`,
     icon: makeBatteryLevelIcon(device.percentage),
     enabled: false
   })) : [{ label: t("noDevices"), enabled: false }];
   tray.setContextMenu(
-    import_electron.Menu.buildFromTemplate([
+    import_electron2.Menu.buildFromTemplate([
       {
         label: connected ? t("connected") : t("waiting"),
         icon: makeConnectionIcon(connected),
@@ -4266,6 +4422,14 @@ function updateTray() {
       { label: t("dashboard"), click: () => {
         void openDashboard();
       } },
+      {
+        label: t("taskbarWidget"),
+        type: "checkbox",
+        checked: appStore.settings.taskbarWidget,
+        click: (item) => {
+          void updateSettings({ taskbarWidget: item.checked });
+        }
+      },
       { label: t("refresh"), click: () => client.refresh() },
       {
         label: t("launchAtStartup"),
@@ -4297,20 +4461,20 @@ function updateTray() {
       ...updater.status().phase === "error" ? [{ label: `${t("updateError")}: ${updater.status().detail}`, enabled: false }] : [],
       {
         label: t("openGHub"),
-        click: () => import_electron.shell.openPath(import_node_path4.default.join(process.env.ProgramFiles ?? "C:\\Program Files", "LGHUB", "lghub.exe"))
+        click: () => import_electron2.shell.openPath(import_node_path5.default.join(process.env.ProgramFiles ?? "C:\\Program Files", "LGHUB", "lghub.exe"))
       },
       { type: "separator" },
-      { label: t("exit"), click: () => import_electron.app.quit() }
+      { label: t("exit"), click: () => import_electron2.app.quit() }
     ])
   );
 }
 function applyLaunchAtStartup(enabled) {
   if (process.platform !== "win32") return;
   const executablePath = process.env.PORTABLE_EXECUTABLE_FILE ?? process.execPath;
-  import_electron.app.setLoginItemSettings({
+  import_electron2.app.setLoginItemSettings({
     openAtLogin: enabled,
     path: executablePath,
-    args: process.defaultApp ? [import_electron.app.getAppPath()] : []
+    args: process.defaultApp ? [import_electron2.app.getAppPath()] : []
   });
 }
 async function updateSettings(patch) {
@@ -4321,7 +4485,7 @@ async function updateSettings(patch) {
 }
 function dashboardState() {
   return {
-    app: { name: APP_NAME, version: import_electron.app.getVersion() },
+    app: { name: APP_NAME, version: import_electron2.app.getVersion() },
     settings: appStore.settings,
     history: appStore.history,
     devices: getDisplayDevices(),
@@ -4332,7 +4496,7 @@ function dashboardState() {
       arch: process.arch,
       electron: process.versions.electron,
       node: process.versions.node,
-      userData: import_electron.app.getPath("userData"),
+      userData: import_electron2.app.getPath("userData"),
       logPath: logger.filePath
     }
   };
@@ -4345,43 +4509,43 @@ function diagnosticsText() {
   return JSON.stringify({ generatedAt: (/* @__PURE__ */ new Date()).toISOString(), ...dashboardState() }, null, 2);
 }
 function registerDashboardIpc() {
-  import_electron.ipcMain.removeHandler("dashboard:get-state");
-  import_electron.ipcMain.removeHandler("dashboard:update-settings");
-  import_electron.ipcMain.removeHandler("dashboard:refresh");
-  import_electron.ipcMain.removeHandler("dashboard:reconnect");
-  import_electron.ipcMain.removeHandler("dashboard:check-update");
-  import_electron.ipcMain.removeHandler("dashboard:restart-update");
-  import_electron.ipcMain.removeHandler("dashboard:clear-history");
-  import_electron.ipcMain.removeHandler("dashboard:open-log");
-  import_electron.ipcMain.removeHandler("dashboard:copy-diagnostics");
-  import_electron.ipcMain.removeHandler("dashboard:window-minimize");
-  import_electron.ipcMain.removeHandler("dashboard:window-toggle-maximize");
-  import_electron.ipcMain.removeHandler("dashboard:window-close");
-  import_electron.ipcMain.handle("dashboard:get-state", () => dashboardState());
-  import_electron.ipcMain.handle("dashboard:update-settings", async (_event, patch) => updateSettings(patch));
-  import_electron.ipcMain.handle("dashboard:refresh", () => client.refresh());
-  import_electron.ipcMain.handle("dashboard:reconnect", async () => {
+  import_electron2.ipcMain.removeHandler("dashboard:get-state");
+  import_electron2.ipcMain.removeHandler("dashboard:update-settings");
+  import_electron2.ipcMain.removeHandler("dashboard:refresh");
+  import_electron2.ipcMain.removeHandler("dashboard:reconnect");
+  import_electron2.ipcMain.removeHandler("dashboard:check-update");
+  import_electron2.ipcMain.removeHandler("dashboard:restart-update");
+  import_electron2.ipcMain.removeHandler("dashboard:clear-history");
+  import_electron2.ipcMain.removeHandler("dashboard:open-log");
+  import_electron2.ipcMain.removeHandler("dashboard:copy-diagnostics");
+  import_electron2.ipcMain.removeHandler("dashboard:window-minimize");
+  import_electron2.ipcMain.removeHandler("dashboard:window-toggle-maximize");
+  import_electron2.ipcMain.removeHandler("dashboard:window-close");
+  import_electron2.ipcMain.handle("dashboard:get-state", () => dashboardState());
+  import_electron2.ipcMain.handle("dashboard:update-settings", async (_event, patch) => updateSettings(patch));
+  import_electron2.ipcMain.handle("dashboard:refresh", () => client.refresh());
+  import_electron2.ipcMain.handle("dashboard:reconnect", async () => {
     reconnecting = true;
     connected = false;
     await pushDashboardState();
     client.reconnect();
   });
-  import_electron.ipcMain.handle("dashboard:check-update", () => updater.check());
-  import_electron.ipcMain.handle("dashboard:restart-update", () => updater.restart());
-  import_electron.ipcMain.handle("dashboard:clear-history", async () => {
+  import_electron2.ipcMain.handle("dashboard:check-update", () => updater.check());
+  import_electron2.ipcMain.handle("dashboard:restart-update", () => updater.restart());
+  import_electron2.ipcMain.handle("dashboard:clear-history", async () => {
     await appStore.clearHistory();
     await pushDashboardState();
   });
-  import_electron.ipcMain.handle("dashboard:open-log", () => import_electron.shell.showItemInFolder(logger.filePath));
-  import_electron.ipcMain.handle("dashboard:copy-diagnostics", () => import_electron.clipboard.writeText(diagnosticsText()));
-  import_electron.ipcMain.handle("dashboard:window-minimize", (event) => import_electron.BrowserWindow.fromWebContents(event.sender)?.minimize());
-  import_electron.ipcMain.handle("dashboard:window-toggle-maximize", (event) => {
-    const window = import_electron.BrowserWindow.fromWebContents(event.sender);
+  import_electron2.ipcMain.handle("dashboard:open-log", () => import_electron2.shell.showItemInFolder(logger.filePath));
+  import_electron2.ipcMain.handle("dashboard:copy-diagnostics", () => import_electron2.clipboard.writeText(diagnosticsText()));
+  import_electron2.ipcMain.handle("dashboard:window-minimize", (event) => import_electron2.BrowserWindow.fromWebContents(event.sender)?.minimize());
+  import_electron2.ipcMain.handle("dashboard:window-toggle-maximize", (event) => {
+    const window = import_electron2.BrowserWindow.fromWebContents(event.sender);
     if (!window) return;
     if (window.isMaximized()) window.unmaximize();
     else window.maximize();
   });
-  import_electron.ipcMain.handle("dashboard:window-close", (event) => import_electron.BrowserWindow.fromWebContents(event.sender)?.hide());
+  import_electron2.ipcMain.handle("dashboard:window-close", (event) => import_electron2.BrowserWindow.fromWebContents(event.sender)?.hide());
 }
 async function openDashboard() {
   if (dashboardWindow && !dashboardWindow.isDestroyed()) {
@@ -4390,15 +4554,17 @@ async function openDashboard() {
     await pushDashboardState();
     return;
   }
-  const preloadDirectory = import_node_path4.default.join(import_electron.app.getPath("userData"), "runtime");
-  const preloadPath = import_node_path4.default.join(preloadDirectory, "dashboard-preload.cjs");
-  await (0, import_promises4.mkdir)(preloadDirectory, { recursive: true });
-  await (0, import_promises4.writeFile)(preloadPath, DASHBOARD_PRELOAD, "utf8");
-  dashboardWindow = new import_electron.BrowserWindow({
+  const preloadDirectory = import_node_path5.default.join(import_electron2.app.getPath("userData"), "runtime");
+  const preloadPath = import_node_path5.default.join(preloadDirectory, "dashboard-preload.cjs");
+  await (0, import_promises5.mkdir)(preloadDirectory, { recursive: true });
+  await (0, import_promises5.writeFile)(preloadPath, DASHBOARD_PRELOAD, "utf8");
+  dashboardWindow = new import_electron2.BrowserWindow({
     width: 1120,
     height: 760,
     minWidth: 820,
     minHeight: 600,
+    resizable: true,
+    thickFrame: true,
     show: false,
     frame: false,
     transparent: true,
@@ -4443,12 +4609,12 @@ function notify(device, event) {
       body = english ? "Battery is at 0%. Connect the device to a charger." : "Pil seviyesi %0. Cihaz\u0131 \u015Farja takmal\u0131s\u0131n.";
       break;
   }
-  if (import_electron.Notification.isSupported()) {
-    new import_electron.Notification({ title, body, urgency: event.type === "empty" ? "critical" : "normal" }).show();
+  if (import_electron2.Notification.isSupported()) {
+    new import_electron2.Notification({ title, body, urgency: event.type === "empty" ? "critical" : "normal" }).show();
   }
 }
 function notifyConnection(title, body) {
-  if (import_electron.Notification.isSupported()) new import_electron.Notification({ title, body }).show();
+  if (import_electron2.Notification.isSupported()) new import_electron2.Notification({ title, body }).show();
 }
 function registerDevices(infos) {
   const t = translator(appStore.settings.language);
@@ -4507,22 +4673,26 @@ function startApp(controller) {
     if (tray && !tray.isDestroyed()) updateTray();
     void pushDashboardState();
   });
-  void import_electron.app.whenReady().then(async () => {
+  void import_electron2.app.whenReady().then(async () => {
     await registerWindowsNotificationIdentity();
-    const userData = import_electron.app.getPath("userData");
+    const userData = import_electron2.app.getPath("userData");
     store = new StateStore(userData);
     appStore = new AppStore(userData);
     logger = new AppLogger(userData);
     await Promise.all([store.load(), appStore.load()]);
+    taskbarWidget = new TaskbarWidget(userData, () => {
+      void openDashboard();
+    });
     applyLaunchAtStartup(appStore.settings.launchAtStartup);
     registerDashboardIpc();
-    logger.info(`Application started (${import_electron.app.getVersion()})`);
-    tray = new import_electron.Tray(makeTrayIcon());
+    logger.info(`Application started (${import_electron2.app.getVersion()})`);
+    tray = new import_electron2.Tray(makeTrayIcon());
     tray.setIgnoreDoubleClickEvents(true);
     tray.on("click", () => {
       void openDashboard().catch((error) => logger.error("Dashboard could not open", error));
     });
     updateTray();
+    setInterval(() => updateTray(), 6e4).unref();
     client = new GHubClient();
     client.on("connected", () => {
       connected = true;
@@ -4539,7 +4709,10 @@ function startApp(controller) {
       connected = false;
       reconnecting = true;
       lastDisconnectedAt = Date.now();
-      for (const device of devices.values()) device.connected = false;
+      for (const device of devices.values()) {
+        device.connected = false;
+        device.updatedAt = void 0;
+      }
       logger.info("Disconnected from G HUB; reconnect scheduled");
       if (shouldNotify) {
         const t = translator(appStore.settings.language);
@@ -4560,7 +4733,7 @@ function startApp(controller) {
       void pushDashboardState();
     });
     client.start();
-    import_electron.app.on("second-instance", () => {
+    import_electron2.app.on("second-instance", () => {
       void openDashboard();
     });
   }).catch((error) => {
@@ -4568,21 +4741,22 @@ function startApp(controller) {
     logger?.error("Application startup failed", error);
   });
 }
-import_electron.app.on("before-quit", () => {
+import_electron2.app.on("before-quit", () => {
   isQuitting = true;
   client?.stop();
-  import_electron.ipcMain.removeHandler("dashboard:get-state");
-  import_electron.ipcMain.removeHandler("dashboard:update-settings");
-  import_electron.ipcMain.removeHandler("dashboard:refresh");
-  import_electron.ipcMain.removeHandler("dashboard:reconnect");
-  import_electron.ipcMain.removeHandler("dashboard:check-update");
-  import_electron.ipcMain.removeHandler("dashboard:restart-update");
-  import_electron.ipcMain.removeHandler("dashboard:clear-history");
-  import_electron.ipcMain.removeHandler("dashboard:open-log");
-  import_electron.ipcMain.removeHandler("dashboard:copy-diagnostics");
-  import_electron.ipcMain.removeHandler("dashboard:window-minimize");
-  import_electron.ipcMain.removeHandler("dashboard:window-toggle-maximize");
-  import_electron.ipcMain.removeHandler("dashboard:window-close");
+  taskbarWidget?.destroy();
+  import_electron2.ipcMain.removeHandler("dashboard:get-state");
+  import_electron2.ipcMain.removeHandler("dashboard:update-settings");
+  import_electron2.ipcMain.removeHandler("dashboard:refresh");
+  import_electron2.ipcMain.removeHandler("dashboard:reconnect");
+  import_electron2.ipcMain.removeHandler("dashboard:check-update");
+  import_electron2.ipcMain.removeHandler("dashboard:restart-update");
+  import_electron2.ipcMain.removeHandler("dashboard:clear-history");
+  import_electron2.ipcMain.removeHandler("dashboard:open-log");
+  import_electron2.ipcMain.removeHandler("dashboard:copy-diagnostics");
+  import_electron2.ipcMain.removeHandler("dashboard:window-minimize");
+  import_electron2.ipcMain.removeHandler("dashboard:window-toggle-maximize");
+  import_electron2.ipcMain.removeHandler("dashboard:window-close");
 });
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {

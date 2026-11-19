@@ -2,6 +2,18 @@
 
 All notable user-facing changes are documented here.
 
+## [1.3.0] - 2026-11-19
+
+### Added
+
+- Compact headset and live battery percentage indicator on the Windows 11 taskbar
+- Settings and tray controls to hide the indicator, select a device, or adjust its position
+- Automatic unknown state for disconnected devices and stale battery readings
+
+### Fixed
+
+- Corrected installer and portable download names in the README
+
 ## [1.2.0] - 2026-09-28
 
 ### Added

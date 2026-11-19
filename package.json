@@ -1,6 +1,6 @@
 {
   "name": "logitech-battery-api",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "author": "Battincik",
   "description": "Logitech Developer Tool is a lightweight Windows tray app for G HUB battery monitoring, history, notifications, diagnostics, and commit-based updates.",
   "main": "dist/bootstrap.js",
