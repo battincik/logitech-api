@@ -11,6 +11,7 @@ export interface AppSettings {
   historyEnabled: boolean;
   taskbarWidget: boolean;
   taskbarWidgetOffset: number;
+  taskbarDeviceId: string;
 }
 
 export interface BatteryHistoryPoint {
@@ -36,6 +37,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   historyEnabled: true,
   taskbarWidget: process.platform === "win32",
   taskbarWidgetOffset: 240,
+  taskbarDeviceId: "auto",
 };
 const HISTORY_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
 const HISTORY_SAMPLE_MS = 5 * 60 * 1000;
@@ -58,7 +60,8 @@ export class AppStore {
       this.data = {
         settings: { ...DEFAULT_SETTINGS, ...parsed.settings, language,
           taskbarWidget: typeof parsed.settings?.taskbarWidget === "boolean" ? parsed.settings.taskbarWidget : DEFAULT_SETTINGS.taskbarWidget,
-          taskbarWidgetOffset: Number.isFinite(offset) ? Math.max(100, Math.min(600, Math.round(offset))) : DEFAULT_SETTINGS.taskbarWidgetOffset },
+          taskbarWidgetOffset: Number.isFinite(offset) ? Math.max(100, Math.min(600, Math.round(offset))) : DEFAULT_SETTINGS.taskbarWidgetOffset,
+          taskbarDeviceId: typeof parsed.settings?.taskbarDeviceId === "string" ? parsed.settings.taskbarDeviceId.slice(0, 200) : "auto" },
         history: parsed.history && typeof parsed.history === "object" ? parsed.history : {},
       };
       this.pruneHistory();
@@ -82,6 +85,7 @@ export class AppStore {
     next.taskbarWidgetOffset = Number.isFinite(Number(next.taskbarWidgetOffset))
       ? Math.max(100, Math.min(600, Math.round(Number(next.taskbarWidgetOffset))))
       : DEFAULT_SETTINGS.taskbarWidgetOffset;
+    next.taskbarDeviceId = typeof next.taskbarDeviceId === "string" ? next.taskbarDeviceId.slice(0, 200) : "auto";
     this.data.settings = next;
     await this.persist();
     return this.settings;

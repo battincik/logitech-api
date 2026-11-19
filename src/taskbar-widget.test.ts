@@ -14,8 +14,15 @@ function device(percentage: number, overrides: Partial<BatteryDevice> = {}): Bat
 
 test("taskbar shows the lowest available battery and charging state", () => {
   assert.deepEqual(selectTaskbarReading([device(90), device(18, { name: "G733", charging: true })], true, now), {
-    name: "G733", percentage: 18, charging: true, tone: "charging",
+    name: "G733", percentage: 18, charging: true, tone: "charging", kind: "headset",
   });
+});
+
+test("selected device does not silently switch to another device", () => {
+  assert.equal(selectTaskbarReading([device(75), device(30, { id: "mouse", name: "G502", model: "mouse" })], true, now, "mouse").percentage, 30);
+  assert.equal(selectTaskbarReading([device(75)], true, now, "mouse").percentage, undefined);
+  assert.equal(selectTaskbarReading([device(75), device(30, { id: "mouse", name: "G502", model: "mouse" })], true, now).percentage, 75);
+  assert.equal(selectTaskbarReading([device(40, { name: "G Pro X Superlight", model: "mouse" })], true, now).kind, "battery");
 });
 
 test("taskbar never presents disconnected or stale readings as live", () => {

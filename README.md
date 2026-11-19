@@ -21,7 +21,7 @@ The dashboard uses a compact Liquid Glass interface with a custom Windows title 
 - Charging duration, sessions, and timeline for the last 24 hours
 - Color-coded tray, battery bars, and connection indicators
 - Compact headset icon and battery percentage on the Windows 11 taskbar
-- Adjustable position, click to open dashboard, and unknown state for stale readings
+- Adjustable position and device selection, click to open dashboard, and unknown state for stale readings
 - Charging, full battery, low battery, empty battery, and disconnect notifications
 - Seven-day local history with automatic sampling and retention
 - G HUB connection status, automatic reconnect, and manual reconnect
@@ -50,7 +50,7 @@ It only connects to:
 
 The application starts in the notification area. Left-click the tray icon to open the dashboard or right-click it for the native menu.
 
-On Windows 11, the compact battery indicator appears on the primary display's bottom taskbar. Adjust its distance from the right edge in **Settings**, or turn it off there or from the tray menu. It uses a small transparent overlay because Windows does not expose an API for placing a wide custom text item in the notification area. Automatic taskbar hiding, top/side taskbars, and some fullscreen applications may affect its placement; the ordinary tray icon remains available.
+On Windows 11, the compact battery indicator appears on the primary display's bottom taskbar. Adjust its distance from the right edge and select a device in **Settings**, or turn it off there or from the tray menu. Automatic selection favors a headset, then the lowest battery. It uses a small transparent overlay because Windows does not expose an API for placing a wide custom text item in the notification area. Automatic taskbar hiding, top/side taskbars, and some fullscreen applications may affect its placement; the ordinary tray icon remains available.
 
 The executable is currently unsigned, so Windows SmartScreen may show a warning on first launch. Confirm that the file came from this repository and compare the SHA-256 digest shown on the release page.
 

@@ -7,7 +7,7 @@ All notable user-facing changes are documented here.
 ### Added
 
 - Compact headset and live battery percentage indicator on the Windows 11 taskbar
-- Settings and tray controls to hide the indicator or adjust its position
+- Settings and tray controls to hide the indicator, select a device, or adjust its position
 - Automatic unknown state for disconnected devices and stale battery readings
 
 ### Fixed
