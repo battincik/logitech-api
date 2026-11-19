@@ -18,6 +18,7 @@ import { GHubClient } from "./ghub-client";
 import { translator } from "./i18n";
 import { AppLogger } from "./logger";
 import { StateStore } from "./state-store";
+import { TaskbarWidget } from "./taskbar-widget";
 import type { UpdateStatus } from "./updater";
 import type {
   BatteryDevice,
@@ -42,6 +43,7 @@ let client: GHubClient;
 let store: StateStore;
 let appStore: AppStore;
 let logger: AppLogger;
+let taskbarWidget: TaskbarWidget | undefined;
 let dashboardWindow: BrowserWindow | undefined;
 let connected = false;
 let hasConnected = false;
@@ -121,16 +123,18 @@ function getDisplayDevices(): BatteryDevice[] {
 function updateTray(): void {
   const listed = getDisplayDevices();
   const t = translator(appStore?.settings.language ?? "tr");
+  taskbarWidget?.update(listed, connected, appStore.settings, t("waiting"));
   const active =
-    listed.find((device) => !device.charging && device.percentage !== undefined) ??
-    listed.find((device) => device.percentage !== undefined);
+    (connected ? listed.find((device) => device.connected && !device.charging && device.percentage !== undefined && device.updatedAt && Date.now() - device.updatedAt < 180_000) : undefined) ??
+    (connected ? listed.find((device) => device.connected && device.percentage !== undefined && device.updatedAt && Date.now() - device.updatedAt < 180_000) : undefined);
 
   tray.setImage(makeTrayIcon(active?.percentage, active?.charging));
   tray.setToolTip(
     listed.length
       ? listed
           .map((device) => {
-            const level = device.percentage === undefined ? t("unknownBattery") : `%${device.percentage}`;
+            const level = !connected || !device.connected || !device.updatedAt || Date.now() - device.updatedAt >= 180_000
+              ? t("unknownBattery") : `%${device.percentage}`;
             return `${device.name}: ${level}${device.charging ? ` · ${t("charging")}` : ""}`;
           })
           .join("\n")
@@ -142,7 +146,8 @@ function updateTray(): void {
   const deviceItems: Electron.MenuItemConstructorOptions[] = listed.length
     ? listed.map((device) => ({
         label: `${device.name} — ${
-          device.percentage === undefined ? t("unknownBattery") : `%${device.percentage}`
+          !connected || !device.connected || !device.updatedAt || Date.now() - device.updatedAt >= 180_000
+            ? t("unknownBattery") : `%${device.percentage}`
         }${device.charging ? " ⚡" : ""}`,
         icon: makeBatteryLevelIcon(device.percentage),
         enabled: false,
@@ -160,6 +165,11 @@ function updateTray(): void {
       ...deviceItems,
       { type: "separator" },
       { label: t("dashboard"), click: () => { void openDashboard(); } },
+      {
+        label: t("taskbarWidget"), type: "checkbox",
+        checked: appStore.settings.taskbarWidget,
+        click: (item) => { void updateSettings({ taskbarWidget: item.checked }); },
+      },
       { label: t("refresh"), click: () => client.refresh() },
       {
         label: t("launchAtStartup"),
@@ -413,6 +423,7 @@ export function startApp(controller: UpdateController): void {
     appStore = new AppStore(userData);
     logger = new AppLogger(userData);
     await Promise.all([store.load(), appStore.load()]);
+    taskbarWidget = new TaskbarWidget(userData, () => { void openDashboard(); });
     applyLaunchAtStartup(appStore.settings.launchAtStartup);
     registerDashboardIpc();
     logger.info(`Application started (${app.getVersion()})`);
@@ -421,6 +432,7 @@ export function startApp(controller: UpdateController): void {
     tray.setIgnoreDoubleClickEvents(true);
     tray.on("click", () => { void openDashboard().catch((error) => logger.error("Dashboard could not open", error)); });
     updateTray();
+    setInterval(() => updateTray(), 60_000).unref();
 
     client = new GHubClient();
     client.on("connected", () => {
@@ -438,7 +450,7 @@ export function startApp(controller: UpdateController): void {
       connected = false;
       reconnecting = true;
       lastDisconnectedAt = Date.now();
-      for (const device of devices.values()) device.connected = false;
+      for (const device of devices.values()) { device.connected = false; device.updatedAt = undefined; }
       logger.info("Disconnected from G HUB; reconnect scheduled");
       if (shouldNotify) {
         const t = translator(appStore.settings.language);
@@ -469,6 +481,7 @@ export function startApp(controller: UpdateController): void {
 app.on("before-quit", () => {
   isQuitting = true;
   client?.stop();
+  taskbarWidget?.destroy();
   ipcMain.removeHandler("dashboard:get-state");
   ipcMain.removeHandler("dashboard:update-settings");
   ipcMain.removeHandler("dashboard:refresh");

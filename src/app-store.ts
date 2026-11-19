@@ -9,6 +9,8 @@ export interface AppSettings {
   language: AppLanguage;
   notifyDisconnect: boolean;
   historyEnabled: boolean;
+  taskbarWidget: boolean;
+  taskbarWidgetOffset: number;
 }
 
 export interface BatteryHistoryPoint {
@@ -32,6 +34,8 @@ const DEFAULT_SETTINGS: AppSettings = {
   language: "tr",
   notifyDisconnect: true,
   historyEnabled: true,
+  taskbarWidget: process.platform === "win32",
+  taskbarWidgetOffset: 240,
 };
 const HISTORY_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
 const HISTORY_SAMPLE_MS = 5 * 60 * 1000;
@@ -50,8 +54,11 @@ export class AppStore {
     try {
       const parsed = JSON.parse(await readFile(this.filePath, "utf8")) as Partial<AppData>;
       const language = parsed.settings?.language === "en" ? "en" : "tr";
+      const offset = Number(parsed.settings?.taskbarWidgetOffset);
       this.data = {
-        settings: { ...DEFAULT_SETTINGS, ...parsed.settings, language },
+        settings: { ...DEFAULT_SETTINGS, ...parsed.settings, language,
+          taskbarWidget: typeof parsed.settings?.taskbarWidget === "boolean" ? parsed.settings.taskbarWidget : DEFAULT_SETTINGS.taskbarWidget,
+          taskbarWidgetOffset: Number.isFinite(offset) ? Math.max(100, Math.min(600, Math.round(offset))) : DEFAULT_SETTINGS.taskbarWidgetOffset },
         history: parsed.history && typeof parsed.history === "object" ? parsed.history : {},
       };
       this.pruneHistory();
@@ -71,6 +78,10 @@ export class AppStore {
   async updateSettings(patch: Partial<AppSettings>): Promise<AppSettings> {
     const next = { ...this.data.settings, ...patch };
     next.language = next.language === "en" ? "en" : "tr";
+    next.taskbarWidget = typeof next.taskbarWidget === "boolean" ? next.taskbarWidget : DEFAULT_SETTINGS.taskbarWidget;
+    next.taskbarWidgetOffset = Number.isFinite(Number(next.taskbarWidgetOffset))
+      ? Math.max(100, Math.min(600, Math.round(Number(next.taskbarWidgetOffset))))
+      : DEFAULT_SETTINGS.taskbarWidgetOffset;
     this.data.settings = next;
     await this.persist();
     return this.settings;
